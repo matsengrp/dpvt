@@ -3,24 +3,26 @@
 ## The "pitch"
 
 Likelihood and parsimony phylogenetic inference work because they consider data on a tree.
-Optimization algorithms don't stare at the sequence alignment and then, separately, look at a tree and try to understand how to improve it.
-Rather, they do tree traversal and think about the sequences in the context of the tree.
+They do tree traversal and digest sequence data in the context of the tree.
 This then enables incremental improvement of the tree.
 
 The goal of this project is to leverage these strategies for phylogenetic inference using deep neural networks.
+This sits in contrast to existing applications of deep neural networks, which work to directly infer a tree from a sequence alignment.
 
 
 ## What are you trying to do? Articulate your objectives using words that would be familiar to someone who had taken an undergraduate class in the topic.
 
 Develop phylogenetic inference methods that can learn from experience, beyond simply learning "hyperparameters" for optimization routines.
 
-More specifically, I would like to propose methods that 
+More specifically, I would like to propose neural-network based methods that 
 
 1. guide incremental improvement on a tree rather than spitting out a complete tree
 2. use tree traversal to integrate data in a phylogenetically relevant way
 3. use alignment columns to compare to other relevant parts of the alignment
 
-As a first step, I propose that we work in a parsimony framework.
+This is a general strategy.
+
+As a first step, I propose that we work in a parsimony framework with a simple objective.
 Given an input tree and represent the sequence data on an input tree using, for example, a run of the Fitch algorithm.
 Modulo ambiguous sites, this is a 1-1 representation of a sequence alignment that provides a phylogenetically relevant structure on which we can think about mutations.
 Furthermore, I propose that the output of this network is a classification of edges of the input tree as being "good" or "bad", i.e. in or not in the "correct" tree (details at bottom).
@@ -88,18 +90,17 @@ A next step would be for the algorithm to suggest these moves.
 ## What are the potential bad outcomes? Any overall concerns here?
 
 1. Will the algorithm learn anything?
-2. Will it be limited to the simplest phylogenetic models? Given the limited overlap between parsimony optimality and BEAST output, will this be useful for anything?
+2. Will it only work for parsimony? Given the limited overlap between parsimony optimality and BEAST output, will this be useful for anything?
 3. Will it be too slow to be useful? Likelihood computation is, in contrast, simple linear algebra.
     * Response: We will only need to do a single forward-backward pass on the tree to get prediction, not lots.
     * Response-response: What about backprop?
 4. Perhaps parsimony and likelihood algorithms are so fast at evaluating SPRs that any attempt to make them "smart" is misguided.
-5. Will we be limited to parsimony improvement?
-6. One can imagine a bad situation in which the algorithm has a "blind spot" that takes us to a local optimum and we never escape because we aren't trying big SPRs.
+5. One can imagine a bad situation in which the algorithm has a "blind spot" that takes us to a local optimum and we never escape because we aren't trying big SPRs.
 
 
 ## Is there pre-existing work/code that could be leveraged to explore the potential for bad outcomes? To do proof-of-concept investigation to get a first-pass answer for the underlying scientific question?
 
-I'd like to think more about this.
+I don't think so, but we'd like to set up some "easy" problems for the NN to try out before trying out the more difficult things.
 
 
 ## Are there any other categorically different approaches that could be applied here?
@@ -114,7 +115,7 @@ Benchmark speed and results against classical heuristic search.
 
 ## What data will you use? Are there appropriate hold-out sets?
 
-Simulated data and real data, see below.
+Public sequence data sets.
 
 
 ## Is it possible that better data would make this project irrelevant?
@@ -122,7 +123,7 @@ Simulated data and real data, see below.
 No.
 
 
-## Sketch the approach, broken down into steps, with expected amounts of time and intermediate steps for each.
+## Sketch the approach
 
 Overall approach is to train on pairs $(X_i, Y_i)$, where 
 
@@ -139,8 +140,12 @@ Harry's point: let's make sure the perturbed tree is suboptimal (we could do thi
 
 Also, note that given a correct tree and a sequence alignment, according to any definition, we can create lots of examples of perturbed trees and corresponding $Y_i$s.
 
+Our loss function is just a cross-entropy classification loss for the per-edge predictions.
 
 <!--
+
+, broken down into steps, with expected amounts of time and intermediate steps for each.
+
 ### Stage 1 (X months):
 
 
