@@ -1,6 +1,15 @@
 # dpvt
 Deep (neural networks for) Phylogenetics Via Traversals
 
+## Installation
+
+```bash
+mamba create -n dpvt python=3.9
+pip install torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.1.0+cpu.html
+pip install ipykernel
+```
+
+
 ## Training Data
 	### Generating Perfect Phylogenies (not yet tested for correctness or completeness)
 		A python class for creating perfect phylogenies given a topology is in 
@@ -14,6 +23,5 @@ Deep (neural networks for) Phylogenetics Via Traversals
 
 	### Perturbing the phylogenies
 		???
-
 
 
