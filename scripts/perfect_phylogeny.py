@@ -9,10 +9,17 @@ from itertools import (
 
 class perfect_phylogeny:
     """
-    ...descriptions not up to date...
-
     A class to determine multiple sequence alignments and mutation histories that form
-    a perfect phylogeny for a given topology.
+    a perfect phylogeny for a given topology. This class supports varying levels of
+    strictness for a perfect phylogeny. By default, we take a perfect phylogeny to be a
+    topology with sequences on all nodes such that for each site and for each allowed
+    character, the subgraph of nodes with the given character at the given site is
+    connected. Options allow for requiring tip sequences to be unique, that no two
+    columns in the sequence alignment (of all nodes) are identical, and/or that every
+    edge has at least one substition.
+
+    The standard use case is to create an instance of the this class from a give ete3
+    tree and call make_trees to generate perfect phylogenies on the tree.
 
     Attributes:
         leaf_indices (list): A list of leaf node indices in the list of nodes.
@@ -21,18 +28,20 @@ class perfect_phylogeny:
             gives the indices of nodes where mutations occur, such that the mutations
             can be chosen to produce a perfect phylogeny
         nodes (list): A preorder list of the nodes of the topology. The node indices
-            used throughout this class are indices into this list.
-            ...preorder, so root is at index 0...
+            used throughout this class are indices into this list. Note the root always
+            has node index 0.
         node_count (int): The nunber of nodes in the topology.
         node_index (dict): A dictionary mapping a node of the topology to its index in
             the list of nodes.
         state_count (int): The number of states.
-        state_lists: each element is a list that marks a node as 0,1,2,...,num states -1
-            where that labelleing will givre a perfect phylo
-            after mapping 0,1,2,....num states-1
-            to some permutation of the allowed state letters.
-            indexed in same order as mutation_node_index_lists
-        state_permutation (dict): ...
+        state_lists (list): A list of lists. Each inner list is of length
+            self.node_count, with the entry at a given node_index being an integer from
+            0 to (self.state_count - 1); applying any bijection from
+            {0, 1, ..., (self.state_count - 1)} to self.states yields a perfect
+            phylogeny. The list at a given index is derived from the list of
+            self.mutation_node_index_lists at the same index.
+        state_permutation (dict): A dictionary mapping an integer r to the list of
+            permutations using r elements of self.states.
         states (list): The allowed characters in sequences.
         tree (ete3.Tree): The topology.
     """
@@ -103,10 +112,9 @@ class perfect_phylogeny:
 
     def node_subs(self, node_index, state_lists_indices, perm_indices):
         """
-        Returns the substitutions for the parent of the specified to the node.
-        This follows the same format as the node_sequence method.
+        Returns the substitutions for the parent of the specified to the node. This
+        follows the same format as the node_sequence method.
         """
-        # need to work out nicer format for list of subs, but ete is picky about allowed characters in newicks.
         r = lambda i: len(self.mutation_node_index_lists[i]) + 1
         perm_fn = lambda r, i, x: self.state_permutations[r][i][x]
         subs = []
@@ -119,8 +127,8 @@ class perfect_phylogeny:
                 if parent_site != node_site:
                     parent = perm_fn(r(sl_index), perm_index, parent_site)
                     child = perm_fn(r(sl_index), perm_index, node_site)
-                    subs.append(f"{i}_{parent}->{child}")
-        return "{" + "|".join(subs) + "}"
+                    subs.append(f"{parent}{i}{child}")
+        return "{" + "_".join(subs) + "}"
 
     def make_tree(
         self,
@@ -130,7 +138,14 @@ class perfect_phylogeny:
         perm_indices,
         unique_leaves=False,
     ):
-        """..."""
+        """
+        Create a single new tree based on indices into self.state_lists and
+        self.state_permutations. The nodes of the tree are optionally labelled with the
+        sequence at that node and/or the substitions from the parent node. Returned is a
+        pair consisting of the new tree and truth value for the tree passing additional
+        requirements. Currently, the only supported additional requirement is that the
+        leaf sequences are unique.
+        """
         seq = lambda n: self.node_sequence(n, state_lists_indices, perm_indices)
         sub = lambda n: self.node_subs(n, state_lists_indices, perm_indices)
 
@@ -153,11 +168,29 @@ class perfect_phylogeny:
         return (tree, is_valid)
 
     def perms_for_states(self, state_list_indices):
-        """..."""
+        """
+        Returns a list of lists. The i-th inner list consists of the valid indices into
+        self.state_permutations[r], where r is the number of different states contained
+        in the state_list specified by the i-th entry of state_list_indices.
+        """
         r = lambda i: len(self.mutation_node_index_lists[i]) + 1
         return [
             list(range(len(self.state_permutations[r(i)]))) for i in state_list_indices
         ]
+
+    def do_lists_mut_all_nodes(self, index_lists_indices):
+        """
+        Returns the truth value for the speficied state_lists (in self.state_lists)
+        giving a perfect phylogeny where every non-root node has at least one mutation.
+        """
+        subbed_node_count = len(
+            {
+                node_index
+                for i in index_lists_indices
+                for node_index in self.mutation_node_index_lists[i]
+            }
+        )
+        return subbed_node_count == self.node_count - 1
 
     def make_trees(
         self,
@@ -165,26 +198,36 @@ class perfect_phylogeny:
         use_sub=True,
         unique_leaves=False,
         distinct_sites=False,
+        sub_on_all_edges=False,
         max_sites=1,
     ):
-        """...only one tree per msa on all nodes (not just leaves), with msa's the same after site rearrangement"""
+        """
+        Returns a generator for the perfect phylogenies, with nodes optionally labelled
+        with sequences or substitions, meeting the given requirement. The generator
+        produces all perfect phylogenies meeting the criteria, but without duplicates
+        from permutating the order of sites in the sequences.
+        """
 
-        reps = perfect_phylogeny.paired_repeat
+        will_be_distinct = perfect_phylogeny.paired_repeat
         next_tree = self.make_tree
         n = len(self.state_lists)
         trees = (
             t[0]
             for m in range(1, max_sites + 1)
             for state_lists in combs_r(range(n), m)
+            if not sub_on_all_edges or self.do_lists_mut_all_nodes(state_lists)
             for perms in prod(*self.perms_for_states(state_lists))
-            if not (distinct_sites and reps(state_lists, perms))
+            if not (distinct_sites and will_be_distinct(state_lists, perms))
             if (t := next_tree(use_seq, use_sub, state_lists, perms, unique_leaves))[1]
         )
         return trees
 
     @staticmethod
     def paired_repeat(list1, list2):
-        """..."""
+        """
+        Returns the truth value of the two lists having a consecutive repeated value at
+        the same index.
+        """
         n = len(list1) - 1
         return any(
             (list1[i] == list1[i + 1] and list2[i] == list2[i + 1] for i in range(n))
@@ -192,7 +235,7 @@ class perfect_phylogeny:
 
     @staticmethod
     def print_columns(tree):
-        """..."""
+        """Prints the columns of the sequence alignment for all nodes in the tree."""
         if not hasattr(tree, "sequence"):
             raise ValueError("The input tree does not have the sequence attribute.")
         cols = list(zip(*(n.sequence for n in tree.traverse(strategy="preorder"))))

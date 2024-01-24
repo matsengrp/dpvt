@@ -14,3 +14,5 @@ dependencies:
   - pandas
   - pytorch
   - ete3
+  - click
+  - ipykernel
