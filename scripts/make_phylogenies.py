@@ -87,14 +87,14 @@ def newick_seq(tree):
 
 
 def newick_sub(tree):
-    non_root = tree.write(features=["sub"], format=9)[:-1]
-    root = "[&&NHX:sub={}];\n"
+    non_root = tree.write(features=["subs"], format=9)[:-1]
+    root = "[&&NHX:subs={}];\n"
     return non_root + root
 
 
 def newick_seq_sub(tree):
-    non_root = tree.write(features=["sequence", "sub"], format=9)[:-1]
-    root = f"[&&NHX:sequence={tree.sequence}:sub=" + "{}];\n"
+    non_root = tree.write(features=["sequence", "subs"], format=9)[:-1]
+    root = f"[&&NHX:sequence={tree.sequence}:subs={{}}];\n"
     return non_root + root
 
 

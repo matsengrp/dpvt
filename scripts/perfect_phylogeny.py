@@ -155,7 +155,7 @@ class PerfectPhylogeny:
             if label_seq:
                 node.add_feature("sequence", seq(node_index))
             if label_sub:
-                node.add_feature("sub", sub(node_index))
+                node.add_feature("subs", sub(node_index))
 
         is_valid = True
         if unique_leaves:
