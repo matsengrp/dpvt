@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import click
 from ete3 import Tree
-from perfect_phylogeny import perfect_phylogeny
+from perfect_phylogeny import PerfectPhylogeny
 
 
 h1 = "Label the nodes of the topology with sequences."
@@ -40,6 +40,12 @@ def run(
     sub_on_all_internal=False,
     max_sites=1,
 ):
+    """
+    Args:
+        input_file: contains newick strings for unlabelled topologies, one on each line
+        output_file: file to write perfect phylogenies, in extended newick format, one 
+            per line
+    """
     newick_format = {
         (False, False): newick_bare,
         (False, True): newick_sub,
@@ -52,7 +58,7 @@ def run(
             for i, newick in enumerate(in_file):
                 print(f"Processing topology {i}.")
                 tree = Tree(newick)
-                phylogeny_maker = perfect_phylogeny(tree)
+                phylogeny_maker = PerfectPhylogeny(tree)
                 p_phylos = phylogeny_maker.make_trees(
                     use_seq,
                     use_sub,
@@ -65,6 +71,8 @@ def run(
                 j = -1
                 for j, p_phylo in enumerate(p_phylos):
                     out_file.write(newick_format(p_phylo))
+                    if j % 10000 == 0 and j > 0:
+                        print(f"  {j} phylogies found...")
                 print(f"Wrote {j+1} perfect phylogenies for topology {i}.")
 
 
