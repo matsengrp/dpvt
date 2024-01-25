@@ -9,7 +9,8 @@ h2 = "Label the nodes of the topology with substitutions."
 h3 = "Require leaf nodes to have unique sequences."
 h4 = "Require no two site columns are identical (among all nodes)."
 h5 = "Require every edge has at least one substitution."
-h6 = "Maximum number of sites in the sequence alignment."
+h6 = "Require every non-terminal edge has at least one substitution."
+h7 = "Maximum number of sites in the sequence alignment."
 
 
 @click.command()
@@ -22,9 +23,12 @@ h6 = "Maximum number of sites in the sequence alignment."
     "--distinct-sites", is_flag=False, flag_value=True, default=False, help=h4
 )
 @click.option(
-    "--sub_on_all_edges", is_flag=False, flag_value=True, default=False, help=h5
+    "--sub-on-all-edges", is_flag=False, flag_value=True, default=False, help=h5
 )
-@click.option("--max-sites", default=1, help=h6)
+@click.option(
+    "--sub-on-all-internal", is_flag=False, flag_value=True, default=False, help=h6
+)
+@click.option("--max-sites", default=1, help=h7)
 def run(
     input_file,
     output_file,
@@ -33,6 +37,7 @@ def run(
     unique_leaves=False,
     distinct_sites=False,
     sub_on_all_edges=False,
+    sub_on_all_internal=False,
     max_sites=1,
 ):
     newick_format = {
@@ -54,6 +59,7 @@ def run(
                     unique_leaves,
                     distinct_sites,
                     sub_on_all_edges,
+                    sub_on_all_internal,
                     max_sites,
                 )
                 j = -1

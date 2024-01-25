@@ -15,8 +15,8 @@ class perfect_phylogeny:
     topology with sequences on all nodes such that for each site and for each allowed
     character, the subgraph of nodes with the given character at the given site is
     connected. Options allow for requiring tip sequences to be unique, that no two
-    columns in the sequence alignment (of all nodes) are identical, and/or that every
-    edge has at least one substition.
+    columns in the sequence alignment (of all nodes) are identical, that every edge has
+    at least one substition, and/or every non-terminal edge has at least one substition.
 
     The standard use case is to create an instance of the this class from a give ete3
     tree and call make_trees to generate perfect phylogenies on the tree.
@@ -192,6 +192,22 @@ class perfect_phylogeny:
         )
         return subbed_node_count == self.node_count - 1
 
+    def do_lists_mut_internal_nodes(self, index_lists_indices):
+        """
+        Returns the truth value for the speficied state_lists (in self.state_lists)
+        giving a perfect phylogeny where every non-root non-leaf node has at least one
+        mutation.
+        """
+        subbed_node_count = len(
+            {
+                node_index
+                for i in index_lists_indices
+                for node_index in self.mutation_node_index_lists[i]
+                if node_index not in self.leaf_indices
+            }
+        )
+        return subbed_node_count == self.node_count - self.leaf_count - 1
+
     def make_trees(
         self,
         use_seq=True,
@@ -199,6 +215,7 @@ class perfect_phylogeny:
         unique_leaves=False,
         distinct_sites=False,
         sub_on_all_edges=False,
+        sub_on_all_internal=False,
         max_sites=1,
     ):
         """
@@ -216,6 +233,7 @@ class perfect_phylogeny:
             for m in range(1, max_sites + 1)
             for state_lists in combs_r(range(n), m)
             if not sub_on_all_edges or self.do_lists_mut_all_nodes(state_lists)
+            if not sub_on_all_internal or self.do_lists_mut_internal_nodes(state_lists)
             for perms in prod(*self.perms_for_states(state_lists))
             if not (distinct_sites and will_be_distinct(state_lists, perms))
             if (t := next_tree(use_seq, use_sub, state_lists, perms, unique_leaves))[1]

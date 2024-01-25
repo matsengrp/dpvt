@@ -7,9 +7,15 @@ echo "Requiring distinct leaf sequences"
     --unique-leaves --max-sites 1
 # Yields 216 topologies.
 
+echo "Requiring subs on all non-terminal nodes + unique leaf sequences"
+../../scripts/make_phylogenies.py example1.nwk ex1_output_1_site_subs_on_internal.nwk \
+    --unique-leaves --sub-on-all-internal --max-sites 1
+# Yields 120 topologies.
+
+
 echo "Requiring subs on all edges..."
 ../../scripts/make_phylogenies.py example1.nwk ex1_output_2_sites_subs_on_edges.nwk \
-    --sub_on_all_edges --max-sites 2 
+    --sub-on-all-edges --max-sites 2 
 # Yields 13,248 topologies.
 
 echo "Requiring distinct leaf sequences"
@@ -19,7 +25,7 @@ echo "Requiring distinct leaf sequences"
 
 echo "Requiring subs on all edges..."
 ../../scripts/make_phylogenies.py example2.nwk ex2_output_3_sites_subs_on_edges.nwk \
-    --sub_on_all_edges --max-sites 3
+    --sub-on-all_edges --max-sites 3
 # Yields 15,482,880 topologies.
 
 
