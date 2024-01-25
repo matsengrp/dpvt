@@ -7,7 +7,7 @@ from itertools import (
 )
 
 
-class perfect_phylogeny:
+class PerfectPhylogeny:
     """
     A class to determine multiple sequence alignments and mutation histories that form
     a perfect phylogeny for a given topology. This class supports varying levels of
@@ -18,32 +18,32 @@ class perfect_phylogeny:
     columns in the sequence alignment (of all nodes) are identical, that every edge has
     at least one substition, and/or every non-terminal edge has at least one substition.
 
-    The standard use case is to create an instance of the this class from a give ete3
+    The standard use case is to create an instance of the this class from a given ete3
     tree and call make_trees to generate perfect phylogenies on the tree.
 
     Attributes:
-        leaf_indices (list): A list of leaf node indices in the list of nodes.
-        leaf_count (int): The number of leaf nodes in the topology.
-        mutation_node_index_lists (list): A list of lists, where each inner list
-            gives the indices of nodes where mutations occur, such that the mutations
-            can be chosen to produce a perfect phylogeny
-        nodes (list): A preorder list of the nodes of the topology. The node indices
-            used throughout this class are indices into this list. Note the root always
-            has node index 0.
+        tree (ete3.Tree): The topology.
+        states (list): The allowed characters in sequences.
+        state_count (int): The number of states.
+        nodes (list of ete3.Trees): List of all nodes of the topology in preorder 
+            traversal. The node indices used throughout this class are indices into this 
+            list. Note the root always has node index 0.
         node_count (int): The nunber of nodes in the topology.
         node_index (dict): A dictionary mapping a node of the topology to its index in
             the list of nodes.
-        state_count (int): The number of states.
-        state_lists (list): A list of lists. Each inner list is of length
+        leaf_indices (list): A list of leaf node indices in the list of nodes.
+        leaf_count (int): The number of leaf nodes in the topology.
+        state_permutations (dict): A dictionary mapping an integer r to the list of
+            permutations using r elements of self.states.
+        mutation_node_index_lists (list of tuples): Each inner tuple gives the indices 
+            of nodes where mutations occur, such that the mutations can be chosen to 
+            produce a perfect phylogeny.
+        state_lists (list of lists): Each inner list is of length
             self.node_count, with the entry at a given node_index being an integer from
             0 to (self.state_count - 1); applying any bijection from
             {0, 1, ..., (self.state_count - 1)} to self.states yields a perfect
             phylogeny. The list at a given index is derived from the list of
             self.mutation_node_index_lists at the same index.
-        state_permutation (dict): A dictionary mapping an integer r to the list of
-            permutations using r elements of self.states.
-        states (list): The allowed characters in sequences.
-        tree (ete3.Tree): The topology.
     """
 
     def __init__(self, tree, states=["A", "G", "C", "T"]):
@@ -222,10 +222,9 @@ class perfect_phylogeny:
         Returns a generator for the perfect phylogenies, with nodes optionally labelled
         with sequences or substitions, meeting the given requirement. The generator
         produces all perfect phylogenies meeting the criteria, but without duplicates
-        from permutating the order of sites in the sequences.
+        from permuting the order of sites in the sequences.
         """
-
-        will_be_distinct = perfect_phylogeny.paired_repeat
+        will_be_distinct = PerfectPhylogeny.paired_repeat
         next_tree = self.make_tree
         n = len(self.state_lists)
         trees = (
