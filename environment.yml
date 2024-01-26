@@ -6,13 +6,14 @@ channels:
 
 dependencies:
   - python=3.9
+  - biopython
+  - click
+  - ete3
+  - git-lfs
+  - ipykernel
+  - matplotlib
   - notebook
   - numpy
-  - biopython
-  - git-lfs
-  - matplotlib
   - pandas
+  - pytest
   - pytorch
-  - ete3
-  - click
-  - ipykernel

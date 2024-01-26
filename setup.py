@@ -11,6 +11,7 @@ setup(
     long_description_content_type="text/markdown",
     packages=find_packages(),
     install_requires=[
+        "click",
         "ete3 >= 3.0.0",
         "pytest >= 7.3",
     ],
