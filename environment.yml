@@ -1,0 +1,19 @@
+name: dpvt
+channels:
+  - conda-forge
+  - defaults
+  - bioconda
+
+dependencies:
+  - python=3.9
+  - biopython
+  - click
+  - ete3
+  - git-lfs
+  - ipykernel
+  - matplotlib
+  - notebook
+  - numpy
+  - pandas
+  - pytest
+  - pytorch
