@@ -14,6 +14,7 @@ setup(
         "click",
         "ete3 >= 3.0.0",
         "pytest >= 7.3",
+        "pytorch >= 2.0.0",
     ],
     python_requires="==3.9.*",
     classifiers=[
