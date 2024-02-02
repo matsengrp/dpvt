@@ -72,7 +72,7 @@ def run(
                 for j, p_phylo in enumerate(p_phylos):
                     out_file.write(newick_format(p_phylo))
                     if j % 10000 == 0 and j > 0:
-                        print(f"  {j} phylogies found...")
+                        print(f"  {j} phylogenies found...")
                 print(f"Wrote {j+1} perfect phylogenies for topology {i}.")
 
 

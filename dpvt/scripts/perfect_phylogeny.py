@@ -27,17 +27,19 @@ class PerfectPhylogeny:
         state_count (int): The number of states.
         nodes (list of ete3.Trees): List of all nodes of the topology in preorder 
             traversal. The node indices used throughout this class are indices into this 
-            list. Note the root always has node index 0.
+            list. Note the root node always has index 0.
         node_count (int): The nunber of nodes in the topology.
         node_index (dict): A dictionary mapping a node of the topology to its index in
-            the list of nodes.
+            the list of nodes. Note the root node always has index 0.
         leaf_indices (list): A list of leaf node indices in the list of nodes.
         leaf_count (int): The number of leaf nodes in the topology.
         state_permutations (dict): A dictionary mapping an integer r to the list of
             permutations using r elements of self.states.
+            The states are used to convert state-placeholders to valid states.
         mutation_node_index_lists (list of tuples): Each inner tuple gives the indices 
-            of nodes where mutations occur, such that the mutations can be chosen to 
-            produce a perfect phylogeny.
+            of nodes where mutations occur, such that the number of mutations is at most
+            (state_count - 1). This means the mutations can be chosen to produce a 
+            perfect phylogeny.
         state_lists (list of lists): Each inner list is of length
             self.node_count, with the entry at a given node_index being an integer from
             0 to (self.state_count - 1); applying any bijection from
@@ -52,20 +54,28 @@ class PerfectPhylogeny:
         self.state_count = len(self.states)
         self.nodes = list(self.tree.traverse(strategy="preorder"))
         self.node_count = len(self.nodes)
-        self.node_index = dict(zip(self.nodes, range(self.node_count)))
-        self.leaf_indices = [self.node_index[leaf] for leaf in self.tree.get_leaves()]
+        # self.node_index = dict(zip(self.nodes, range(self.node_count)))
+        for i, node in enumerate(self.nodes):
+            node.add_feature("node_index", i)
+            # node.add_feature("node_index", self.node_index[node])
+        self.leaf_indices = [leaf.node_index for leaf in self.tree.get_leaves()]
+        # self.leaf_indices = [i for i in range(self.node_count) if self.nodes[i].is_leaf()]
         self.leaf_count = len(self.leaf_indices)
         self.state_permutations = {
             r: list(perms(self.states, r)) for r in range(1, self.state_count + 1)
         }
 
-        for node in self.nodes:
-            node.add_feature("node_index", self.node_index[node])
         self.make_mutation_index_lists()
         self.make_state_lists()
 
     def make_mutation_index_lists(self):
-        """Initialize self.mutation_node_index_lists."""
+        """
+        Initialize self.mutation_node_index_lists.
+        This attribute is a list of tuples. Each inner tuple gives the indices of child-
+        nodes of edges where mutations occur, such that the number of mutations is at 
+        most (state_count - 1). This means the mutations can be chosen to produce a 
+        perfect phylogeny.
+        """
         self.mutation_node_index_lists = [
             mutated_node_indices
             for num_subs in range(0, self.state_count)
@@ -76,20 +86,30 @@ class PerfectPhylogeny:
     def make_state_lists(self):
         """Initialize self.state_lists."""
         self.state_lists = list(
-            map(self.make_state_list, self.mutation_node_index_lists)
+            map(self.mutation_to_state_list, self.mutation_node_index_lists)
         )
         return None
 
-    def make_state_list(self, node_indices):
+    def mutation_to_state_list(self, mutation_node_indices):
         """
         Make an entry for self.state_lists from one of self.mutation_node_index_lists.
+        This is a list indexed by nodes, where each entry is a state-placeholder which 
+        will later be replaced by a state from self.states.
+        
+        Args:
+            mutation_node_indices: a list of node indices where a mutation occurs on 
+                parent edge
+        Returns:
+            a list of state-placeholders for all nodes of the tree
         """
         state_list = [0] * self.node_count
-        for i, j in enumerate(node_indices, 1):
+        for i, j in enumerate(mutation_node_indices, 1):
             state_list[j] = i
-        for node, index in self.node_index.items():
-            if index not in node_indices and not node.is_root():
-                parent_index = self.node_index[node.up]
+        # for node, index in self.node_index.items():
+        for index, node in enumerate(self.nodes):
+            if not (node.is_root() or index in mutation_node_indices):
+            # if not node.is_root() and state_list[index] == 0:
+                parent_index = node.up.node_index
                 state_list[index] = state_list[parent_index]
         return state_list
 
@@ -100,6 +120,11 @@ class PerfectPhylogeny:
         sequence is obtained by applying the j-th permutation (of appropriate size) to
         the entry of the k-th state list corresponding to the node, where j is the i-th
         entry of perm_indices and k is the i-th entry of state_lists_indices.
+
+        Args:
+            node_index (int)
+            state_lists_indices (?)
+            perm_indices (?)
         """
         r = lambda i: len(self.mutation_node_index_lists[i]) + 1
         perm_fn = lambda r, i, x: self.state_permutations[r][i][x]
