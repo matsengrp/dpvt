@@ -10,6 +10,7 @@ dependencies:
   - click
   - ete3
   - git-lfs
+  - historydag
   - ipykernel
   - matplotlib
   - notebook

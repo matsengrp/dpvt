@@ -10,7 +10,8 @@ h3 = "Require leaf nodes to have unique sequences."
 h4 = "Require no two site columns are identical (among all nodes)."
 h5 = "Require every edge has at least one substitution."
 h6 = "Require every non-terminal edge has at least one substitution."
-h7 = "Maximum number of sites in the sequence alignment."
+h7 = "Minimum number of sites in the sequence alignment."
+h8 = "Maximum number of sites in the sequence alignment."
 
 
 @click.command()
@@ -28,7 +29,8 @@ h7 = "Maximum number of sites in the sequence alignment."
 @click.option(
     "--sub-on-all-internal", is_flag=False, flag_value=True, default=False, help=h6
 )
-@click.option("--max-sites", default=1, help=h7)
+@click.option("--min-sites", default=1, help=h7)
+@click.option("--max-sites", default=1, help=h8)
 def run(
     input_file,
     output_file,
@@ -38,12 +40,13 @@ def run(
     distinct_sites=False,
     sub_on_all_edges=False,
     sub_on_all_internal=False,
+    min_sites=1,
     max_sites=1,
 ):
     """
     Args:
         input_file: contains newick strings for unlabelled topologies, one on each line
-        output_file: file to write perfect phylogenies, in extended newick format, one 
+        output_file: file to write perfect phylogenies, in extended newick format, one
             per line
     """
     newick_format = {
@@ -66,13 +69,14 @@ def run(
                     distinct_sites,
                     sub_on_all_edges,
                     sub_on_all_internal,
+                    min_sites,
                     max_sites,
                 )
                 j = -1
                 for j, p_phylo in enumerate(p_phylos):
                     out_file.write(newick_format(p_phylo))
-                    if j % 10000 == 0 and j > 0:
-                        print(f"  {j} phylogies found...")
+                    if (j + 1) % 10000 == 0:
+                        print(f"  {j+1} phylogenies found...")
                 print(f"Wrote {j+1} perfect phylogenies for topology {i}.")
 
 
