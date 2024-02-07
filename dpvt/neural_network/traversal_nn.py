@@ -23,7 +23,9 @@ class TraverseNN(nn.Module):
     def forward(self, tree):
         """
         Args:
-            tree (ete3 Tree): has attributes feature_0 on each node
+            tree (ete3 Tree): has attribute feature_0 on each node, which is a torch
+                tensor that encodes the mutation between the node and its parent, e.g. 
+                A -> G is encoded by [-1, 1, 0, 0]
         """
         tree = tree.copy()
         # root-ward traversal

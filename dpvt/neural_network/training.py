@@ -1,14 +1,23 @@
-from ete3 import Tree
 import torch
 from torch import nn
+from ete3 import Tree
 from traversal_nn import TraverseNN
 
 # tree with maximum parsimony
 t_good = Tree("(0,(1,2));")
 for node in (t_good, t_good.children[0]):
     node.sequence = "A"
-for node in (t_good.children[1], t_good.children[1].children[0], t_good.children[1].children[1]):
+for node in (
+    t_good.children[1], t_good.children[1].children[0], t_good.children[1].children[1]
+):
     node.sequence = "T"
+"""
+   /-A
+-A|
+  |   /-T
+   \T|
+      \-T
+"""
 
 # tree without maximum parsimony
 t_bad = Tree("(0,(1,2));")
@@ -16,25 +25,54 @@ for node in (t_bad, t_bad.children[1], t_bad.children[1].children[1]):
     node.sequence = "A"
 for node in (t_bad.children[0], t_bad.children[1].children[0]):
     node.sequence = "T"
+"""
+   /-T
+-A|
+  |   /-T
+   \A|
+      \-A
+"""
+
+STATE_TO_IDX = {
+    "A": 0,
+    "G": 1,
+    "C": 2,
+    "T": 3
+}
+
+def assign_features(tree):
+    """
+    modifies input tree by adding attribute feature_0, which is a 4-element torch.tensor 
+    which records the mutation from the parent to child node,
+    e.g., a mutation `A -> T` is encoded as [-1, 0, 0, 1]
+    Args:
+        tree (ete3 Tree): has sequence attribute on each node
+    Returns: None 
+    """
+    for node in tree.traverse():
+        if node.up is None:
+            # node is root
+            node.add_feature("feature_0", torch.zeros(4))
+        else:
+            # non-root node
+            mut_vec = [0, 0, 0, 0]
+            n_seq = node.sequence
+            mut_vec[STATE_TO_IDX[n_seq]] += 1
+            p_seq = node.up.sequence
+            mut_vec[STATE_TO_IDX[p_seq]] -= 1
+            node.add_feature("feature_0", torch.tensor(mut_vec))
+    return None
 
 # assign mutation features
 for tree in [t_good, t_bad]:
-    for node in tree.traverse():
-        if node.up is None:
-            node.add_feature("feature_0", torch.zeros(4))
-            continue
-        n_seq = node.sequence
-        p_seq = node.up.sequence
-        if n_seq == p_seq:
-            node.add_feature("feature_0", torch.zeros(4))
-        else: # mutation is A -> T
-            node.add_feature("feature_0", torch.tensor([-1,0,0,1]))
+    assign_features(tree)
 
 print("good tree:")
 print(t_good.get_ascii(attributes=["sequence"]))
 print(t_good.get_ascii(attributes=["feature_0"]))
 
-print("\nbad tree:")
+print("\n")
+print("bad tree:")
 print(t_bad.get_ascii(attributes=["sequence"]))
 print(t_bad.get_ascii(attributes=["feature_0"]))
 
@@ -42,7 +80,7 @@ print(t_bad.get_ascii(attributes=["feature_0"]))
 tnn = TraverseNN()
 lr = 0.5
 epochs = 2
-n = 20
+n = 5
 
 loss_fn = nn.BCEWithLogitsLoss()
 
@@ -75,7 +113,34 @@ def fit():
                             # print(f"no update of param, size {p.shape};", e)
                             pass
                         tnn.zero_grad()
-
-
 fit()
 
+
+"""
+      /-G
+   /G|
+-A|   \-G
+  |
+   \-A
+"""
+nwk = (
+    "((0[&&NHX:sequence=G],1[&&NHX:sequence=G])[&&NHX:sequence=G],2[&&NHX:sequence=A])["
+    "&&NHX:sequence=A];"
+)
+test_tree1 = Tree(nwk)
+assign_features(test_tree1)
+
+
+nwk = (
+    "((0[&&NHX:sequence=G],1[&&NHX:sequence=A])[&&NHX:sequence=G],2[&&NHX:sequence=A])["
+    "&&NHX:sequence=G];"
+)
+"""
+      /-G
+   /G|
+-G|   \-A
+  |
+   \-A
+"""
+test_bad = Tree(nwk)
+assign_features(test_bad)
