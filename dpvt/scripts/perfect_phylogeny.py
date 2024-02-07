@@ -132,12 +132,16 @@ class PerfectPhylogeny:
                   /-some node|
             -root|            \-z
                   \-x
+        and
+                  /-x
+            -root|
+                  \-y
         where x, y, and z have mutations.
         """
         left, right = self.tree.children
         left_index = left.node_index
         right_index = right.node_index
-        self.bad_root_patterns = set()
+        self.bad_root_patterns = {tuple(sorted((left_index, right_index)))}
         if not left.is_leaf():
             ll_index, lr_index = map(lambda x: x.node_index, left.children)
             self.bad_root_patterns.add(tuple(sorted((right_index, ll_index, lr_index))))
@@ -177,17 +181,11 @@ class PerfectPhylogeny:
 
     def make_mutation_index_sets(self):
         """Initialize self.mutation_node_index_sets."""
-        # no_siblings = lambda node_indices: not any(
-        #    self.nodes[i].get_sisters()[0].node_index in node_indices
-        #    for i in node_indices
-        # )
-
         self.mutation_node_index_sets = tuple(
             set(mutated_node_indices)
             for num_subs in range(0, self.state_count)
             for mutated_node_indices in combs(range(1, self.node_count), num_subs)
             if self.no_bad_patterns(mutated_node_indices)
-            # if no_siblings(mutated_node_indices)
         )
         return None
 
