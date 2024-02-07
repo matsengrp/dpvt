@@ -27,6 +27,8 @@ class PerfectPhylogeny:
     tree and call make_trees to generate perfect phylogenies on the tree.
 
     Attributes:
+        bad_root_patterns (set tuples): The tuples of node indices not allowed as
+            mutations near the root.
         cherry_index_pairs (set of pairs): The set of pairs of leaf indices
             (leaf1, leaf2), where the two leaves are siblings and
             leaf1.node_index < leaf2.node_index.
@@ -66,6 +68,13 @@ class PerfectPhylogeny:
     """
 
     def __init__(self, tree, states=("A", "G", "C", "T")):
+        if len(tree.get_leaves()) <= 2:
+            raise ValueError("Please supply a tree with more than two leaves.")
+        if len(states) > 4:
+            raise NotImplementedError(
+                "We do not currently support more than four letters."
+            )
+
         self.tree = tree.copy()
         self.states = states
         self.state_count = len(self.states)
@@ -84,6 +93,7 @@ class PerfectPhylogeny:
 
         for node in self.nodes:
             node.add_feature("node_index", self.node_index[node])
+        self.make_bad_root_patterns()
         self.make_cherry_index_pairs()
         self.make_mutation_index_sets()
         self.make_mutation_internal_node_index_sets()
@@ -115,17 +125,69 @@ class PerfectPhylogeny:
     #    self.rng.shuffle(self.indices)
     #    return None
 
+    def make_bad_root_patterns(self):
+        """
+        Initialize self.bad_root_patterns to contain the disallowed mutation patterns:
+                              /-y
+                  /-some node|
+            -root|            \-z
+                  \-x
+        where x, y, and z have mutations.
+        """
+        left, right = self.tree.children
+        left_index = left.node_index
+        right_index = right.node_index
+        self.bad_root_patterns = set()
+        if not left.is_leaf():
+            ll_index, lr_index = map(lambda x: x.node_index, left.children)
+            self.bad_root_patterns.add(tuple(sorted((right_index, ll_index, lr_index))))
+        if not right.is_leaf():
+            rl_index, rr_index = map(lambda x: x.node_index, right.children)
+            self.bad_root_patterns.add(tuple(sorted((left_index, rl_index, rr_index))))
+        return None
+
+    def no_bad_patterns(self, node_indices):
+        """
+        Returns the truth value of the tuple of node indices (assumed to be in ascending
+        order) avoiding the patterns:
+               /-y
+            -x|
+               \-z
+        and
+                              /-y
+                  /-some node|
+            -root|            \-z
+                  \-x
+        ,where x, y, z are the node indices (in any order).
+        """
+        if len(node_indices) <= 2:
+            return True
+        else:
+            n1 = node_indices[0]
+            n2_n3 = set(node_indices[1:])
+            pattern1 = n1 in self.internal_node_indices and n2_n3.issuperset(
+                self.nodes[n1].children
+            )
+            # Because node_indices is in ascending order and self.nodes is in preorder,
+            # we only need to check for n1 being the parent of n2 and n3.
+
+            pattern2 = node_indices in self.bad_root_patterns
+
+            return not (pattern1 or pattern2)
+
     def make_mutation_index_sets(self):
         """Initialize self.mutation_node_index_sets."""
-        no_siblings = lambda node_indices: not any(
-            self.nodes[i].get_sisters()[0].node_index in node_indices
-            for i in node_indices
-        )
+        # no_siblings = lambda node_indices: not any(
+        #    self.nodes[i].get_sisters()[0].node_index in node_indices
+        #    for i in node_indices
+        # )
+
         self.mutation_node_index_sets = tuple(
             set(mutated_node_indices)
             for num_subs in range(0, self.state_count)
             for mutated_node_indices in combs(range(1, self.node_count), num_subs)
-            if no_siblings(mutated_node_indices)
+            if self.no_bad_patterns(mutated_node_indices)
+            # if no_siblings(mutated_node_indices)
         )
         return None
 
