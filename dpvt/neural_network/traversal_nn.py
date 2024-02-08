@@ -7,7 +7,7 @@ class TraverseNN(nn.Module):
     def __init__(self):
         super().__init__()
         self.up_traverse_stack = nn.Sequential(
-            nn.Linear(8, 32),
+            nn.Linear(16, 32),
             nn.ReLU(),
             nn.Linear(32,4),
         )
@@ -38,9 +38,16 @@ class TraverseNN(nn.Module):
                 except ValueError:
                     raise ValueError("Input tree must be bifurcating")
                 x = torch.cat((child1.feature_0, child1.feature_1))
-                node.feature_1 = self.up_traverse_stack(x)
                 y = torch.cat((child2.feature_0, child2.feature_1))
-                node.feature_1 += self.up_traverse_stack(y)
+                # pass concatentation of feature vectors of children in both orders,
+                # `(x, y)` and `(y, x)` and add outputs, in order to apply symmetry 
+                # constraint
+                node.feature_1 = self.up_traverse_stack(
+                    torch.cat((x, y))
+                )
+                node.feature_1 += self.up_traverse_stack(
+                    torch.cat((y, x))
+                )
         # leaf-ward traversal -> skip for now
         # logits = self.up_traverse_stack(x)
         # feed root feature into final layer
