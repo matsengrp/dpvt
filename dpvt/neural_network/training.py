@@ -3,36 +3,6 @@ from torch import nn
 from ete3 import Tree
 from traversal_nn import TraverseNN
 
-# tree with maximum parsimony
-t_good = Tree("(0,(1,2));")
-for node in (t_good, t_good.children[0]):
-    node.sequence = "A"
-for node in (
-    t_good.children[1], t_good.children[1].children[0], t_good.children[1].children[1]
-):
-    node.sequence = "T"
-"""
-   /-A
--A|
-  |   /-T
-   \T|
-      \-T
-"""
-
-# tree without maximum parsimony
-t_bad = Tree("(0,(1,2));")
-for node in (t_bad, t_bad.children[1], t_bad.children[1].children[1]):
-    node.sequence = "A"
-for node in (t_bad.children[0], t_bad.children[1].children[0]):
-    node.sequence = "T"
-"""
-   /-T
--A|
-  |   /-T
-   \A|
-      \-A
-"""
-
 STATE_TO_IDX = {
     "A": 0,
     "G": 1,
@@ -63,18 +33,6 @@ def assign_features(tree):
             node.add_feature("feature_0", torch.tensor(mut_vec))
     return None
 
-# assign mutation features
-for tree in [t_good, t_bad]:
-    assign_features(tree)
-
-print("good tree:")
-print(t_good.get_ascii(attributes=["sequence"]))
-print(t_good.get_ascii(attributes=["feature_0"]))
-
-print("\n")
-print("bad tree:")
-print(t_bad.get_ascii(attributes=["sequence"]))
-print(t_bad.get_ascii(attributes=["feature_0"]))
 
 
 tnn = TraverseNN()
@@ -113,8 +71,76 @@ def fit():
                             # print(f"no update of param, size {p.shape};", e)
                             pass
                         tnn.zero_grad()
-fit()
+# fit()
 
+"""
+tree data for training
+"""
+# tree with maximum parsimony
+t_good = Tree("(0,(1,2));")
+for node in (t_good, t_good.children[0]):
+    node.sequence = "A"
+for node in (
+    t_good.children[1], t_good.children[1].children[0], t_good.children[1].children[1]
+):
+    node.sequence = "T"
+"""
+   /-A
+-A|
+  |   /-T
+   \T|
+      \-T
+"""
+good_nwks = [
+    "(A,(T,T)T)A;",
+    "(G,(T,T)T)G;",
+    "(C,(T,T)T)C;",
+    "(C,(A,A)A)C;",
+    "((T,T)T,G)G;",
+    "((T,T)T,C)C;",
+    "((G,G)G,A)A;",
+    "((C,C)C,A)A;",
+]
+bad_nwks = [
+    "(T,(T,A)A)A;",
+    "(C,(C,A)A)A;",
+    "(G,(G,A)A)A;",
+    "(T,(T,A)A)A;",
+    "(T,(T,A)A)A;",
+    "(T,(T,A)A)A;",
+]
+
+good_trees = [Tree(nwk, format=8) for nwk in good_nwks]
+for tree in good_trees:
+    for n in tree.traverse():
+        n.sequence = n.name
+    assign_features(tree)
+
+# tree without maximum parsimony
+t_bad = Tree("(0,(1,2));")
+for node in (t_bad, t_bad.children[1], t_bad.children[1].children[1]):
+    node.sequence = "A"
+for node in (t_bad.children[0], t_bad.children[1].children[0]):
+    node.sequence = "T"
+"""
+   /-T
+-A|
+  |   /-T
+   \A|
+      \-A
+"""
+# assign mutation features
+for tree in [t_good, t_bad]:
+    assign_features(tree)
+
+# print("good tree:")
+# print(t_good.get_ascii(attributes=["sequence"]))
+# print(t_good.get_ascii(attributes=["feature_0"]))
+
+# print("\n")
+# print("bad tree:")
+# print(t_bad.get_ascii(attributes=["sequence"]))
+# print(t_bad.get_ascii(attributes=["feature_0"]))
 
 """
       /-G
@@ -127,8 +153,8 @@ nwk = (
     "((0[&&NHX:sequence=G],1[&&NHX:sequence=G])[&&NHX:sequence=G],2[&&NHX:sequence=A])["
     "&&NHX:sequence=A];"
 )
-test_tree1 = Tree(nwk)
-assign_features(test_tree1)
+test_good = Tree(nwk)
+assign_features(test_good)
 
 
 nwk = (
