@@ -143,10 +143,10 @@ class PerfectPhylogeny:
         right_index = right.node_index
         self.bad_root_patterns = {tuple(sorted((left_index, right_index)))}
         if not left.is_leaf():
-            ll_index, lr_index = map(lambda x: x.node_index, left.children)
+            ll_index, lr_index = (x.node_index for x in left.children)
             self.bad_root_patterns.add(tuple(sorted((right_index, ll_index, lr_index))))
         if not right.is_leaf():
-            rl_index, rr_index = map(lambda x: x.node_index, right.children)
+            rl_index, rr_index = (x.node_index for x in right.children)
             self.bad_root_patterns.add(tuple(sorted((left_index, rl_index, rr_index))))
         return None
 
