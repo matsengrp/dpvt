@@ -38,5 +38,5 @@ $SCRIPT example2.nwk ex2_output_2_site_subs_on_internal.nwk --unique-leaves \
 echo "Requiring subs on all edges..."
 $SCRIPT example2.nwk ex2_output_3_sites_subs_on_edges.nwk --sub-on-all-edges \
     --min-sites 3 --max-sites 3
-#Yields ??? phylogenies.
+#Yields 147,722,560 phylogenies. phylogenies.
 
