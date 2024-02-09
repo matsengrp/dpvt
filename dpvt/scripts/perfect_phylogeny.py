@@ -54,7 +54,7 @@ class PerfectPhylogeny:
         tree (ete3.Tree): The topology.
     """
 
-    def __init__(self, tree: Tree, states: tuple[str]=("A", "G", "C", "T")):
+    def __init__(self, tree: Tree, states: tuple[str] = ("A", "G", "C", "T")):
         if len(tree.get_leaves()) <= 2:
             raise ValueError("Please supply a tree with more than two leaves.")
         if len(states) > 4:
@@ -71,15 +71,15 @@ class PerfectPhylogeny:
         traversal. The node indices used throughout this class are indices into this
         tuple. Note the root node always has index 0."""
         self.node_count = len(self.nodes)
-        # self.node_index = dict(zip(self.nodes, range(self.node_count)))
 
         for i, node in enumerate(self.nodes):
             node.add_feature("node_index", i)
 
         self.leaf_indices = {leaf.node_index for leaf in self.nodes if leaf.is_leaf()}
         self.internal_node_indices = {
-            node.node_index 
-            for node in self.nodes if not node.is_leaf() and not node.is_root()
+            node.node_index
+            for node in self.nodes
+            if not (node.is_leaf() or node.is_root())
         }
         self.leaf_count = len(self.leaf_indices)
         self.internal_node_count = self.node_count - self.leaf_count - 1
@@ -88,19 +88,19 @@ class PerfectPhylogeny:
             r: tuple(perms(self.states, r)) for r in range(1, self.state_count + 1)
         }
 
-        self._cherry_index_pairs = None
+        self.cherry_index_pairs = None
         """The set of pairs of leaf indices (leaf1, leaf2), where the two leaves are 
         siblings and leaf1.node_index < leaf2.node_index."""
-        self._bad_root_patterns = None
+        self.bad_root_patterns = None
         """The set of tuples of node indices not allowed as mutations near the root."""
-        self._mutation_node_index_sets = None
+        self.mutation_node_index_sets = None
         """(tuple of sets): Each inner set gives the indices of nodes where mutations 
         occur, such that the number of mutations is at most (state_count - 1). This 
         means the mutations can be chosen to produce a perfect phylogeny."""
-        self._mutation_internal_node_index_sets = None
+        self.mutation_internal_node_index_sets = None
         """(tuple of sets): The entries of mutation_node_index_sets restricted to 
         internal nodes."""
-        self._mutation_leaf_node_index_sets = None
+        self.mutation_leaf_node_index_sets = None
         """(tuple of sets): The entries of mutation_node_index_sets restricted to leaf 
         nodes."""
         self.state_tuples = None
@@ -111,12 +111,12 @@ class PerfectPhylogeny:
         topology satisfying the subgraph criteria of a perfect phylogeny. The inner
         tuple at a given index is derived from the set at the same index in
         self.mutation_node_index_sets."""
-        self._make_bad_root_patterns()
-        self._make_cherry_index_pairs()
-        self._make_mutation_index_sets()
-        self._make_mutation_internal_node_index_sets()
-        self._make_mutation_leaf_node_index_sets()
-        self._make_state_tuples()
+        self.make_bad_root_patterns()
+        self.make_cherry_index_pairs()
+        self.make_mutation_index_sets()
+        self.make_mutation_internal_node_index_sets()
+        self.make_mutation_leaf_node_index_sets()
+        self.make_state_tuples()
 
         # CJS: This is work in progress for random sampling. Ignore for now.
         # self.rng = np.random.default_rng()
@@ -143,9 +143,9 @@ class PerfectPhylogeny:
     #    self.rng.shuffle(self.indices)
     #    return None
 
-    def _make_bad_root_patterns(self):
+    def make_bad_root_patterns(self):
         """
-        Initialize self._bad_root_patterns to contain the disallowed mutation patterns:
+        Initialize self.bad_root_patterns to contain the disallowed mutation patterns:
                               /-y
                   /-some node|
             -root|            \-z
@@ -159,47 +159,59 @@ class PerfectPhylogeny:
         left, right = self.tree.children
         left_index = left.node_index
         right_index = right.node_index
-        self._bad_root_patterns = {tuple(sorted((left_index, right_index)))}
+        bad_patterns = [(left_index, right_index)]
         if not left.is_leaf():
-            ll_index, lr_index = (x.node_index for x in left.children)
-            self._bad_root_patterns.add(tuple(sorted((right_index, ll_index, lr_index))))
+            left_left_index, left_right_index = (x.node_index for x in left.children)
+            bad_patterns.append((right_index, left_left_index, left_right_index))
+            bad_patterns.append((right_index, left_index, left_left_index))
+            bad_patterns.append((right_index, left_index, left_right_index))
         if not right.is_leaf():
-            rl_index, rr_index = (x.node_index for x in right.children)
-            self._bad_root_patterns.add(tuple(sorted((left_index, rl_index, rr_index))))
+            right_left_index, right_right_index = (x.node_index for x in right.children)
+            bad_patterns.append((left_index, right_left_index, right_right_index))
+            bad_patterns.append((left_index, right_index, right_left_index))
+            bad_patterns.append((left_index, right_index, right_right_index))
+        self.bad_root_patterns = {tuple(sorted(bad)) for bad in bad_patterns}
+
         return None
 
     def no_bad_patterns(self, mut_node_indices):
         """
-        Returns the truth value of the tuple of mutated node indices (assumed to be in 
+        Returns the truth value of the tuple of mutated node indices (assumed to be in
         ascending order) avoiding the patterns:
                /-y
             -x|
                \-z
-        and
+        ,
+                  /-x
+            -root|
+                  \-y
+        , and
                               /-y
                   /-some node|
             -root|            \-z
                   \-x
         , where x, y, z are the node indices (in any order).
         """
-        if len(mut_node_indices) <= 2:
+        if len(mut_node_indices) <= 1:
             return True
         else:
             n1 = mut_node_indices[0]
+            n1_child_indices = (x.node_index for x in self.nodes[n1].children)
             n2_n3 = set(mut_node_indices[1:])
-            has_pattern1 = n1 in self.internal_node_indices and n2_n3.issuperset(
-                self.nodes[n1].children
+            is_first_pattern = n1 in self.internal_node_indices and n2_n3.issuperset(
+                n1_child_indices
             )
-            # Because mut_node_indices is in ascending order and self.nodes is in 
+            # Because mut_node_indices is in ascending order and self.nodes is in
             # preorder, we only need to check for n1 being the parent of n2 and n3.
+            # If there are only two node indices instead of three, this pattern fails.
 
-            has_pattern2 = mut_node_indices in self._bad_root_patterns
+            is_root_pattern = mut_node_indices in self.bad_root_patterns
 
-            return not (has_pattern1 or has_pattern2)
+            return not (is_first_pattern or is_root_pattern)
 
-    def _make_mutation_index_sets(self):
+    def make_mutation_index_sets(self):
         """Initialize self.mutation_node_index_sets."""
-        self._mutation_node_index_sets = tuple(
+        self.mutation_node_index_sets = tuple(
             set(mutated_node_indices)
             for num_subs in range(0, self.state_count)
             for mutated_node_indices in combs(range(1, self.node_count), num_subs)
@@ -207,35 +219,33 @@ class PerfectPhylogeny:
         )
         return None
 
-    def _make_mutation_internal_node_index_sets(self):
+    def make_mutation_internal_node_index_sets(self):
         """Initialize self.mutation_internal_node_index_sets."""
-        self._mutation_internal_node_index_sets = tuple(
-            # map(self.internal_node_indices.intersection, self._mutation_node_index_sets)
-            x.intersection(self.internal_node_indices) 
-            for x in self._mutation_node_index_sets
+        self.mutation_internal_node_index_sets = tuple(
+            map(self.internal_node_indices.intersection, self.mutation_node_index_sets)
         )
         return None
 
-    def _make_mutation_leaf_node_index_sets(self):
+    def make_mutation_leaf_node_index_sets(self):
         """Initialize self.mutation_leaf_node_index_sets."""
-        self._mutation_leaf_node_index_sets = tuple(
-            map(self.leaf_indices.intersection, self._mutation_node_index_sets)
+        self.mutation_leaf_node_index_sets = tuple(
+            map(self.leaf_indices.intersection, self.mutation_node_index_sets)
         )
         return None
 
-    def _make_state_tuples(self):
+    def make_state_tuples(self):
         """Initialize self.state_tuples."""
         self.state_tuples = tuple(
-            map(self.mutation_to_state_tuple, self._mutation_node_index_sets)
+            map(self.mutation_to_state_tuple, self.mutation_node_index_sets)
         )
         return None
 
-    def _make_cherry_index_pairs(self):
-        """Initialize self._cherry_index_pairs. This is the set of pairs of leaf indices
+    def make_cherry_index_pairs(self):
+        """Initialize self.cherry_index_pairs. This is the set of pairs of leaf indices
         (leaf1, leaf2), where the two leaves are siblings and
         leaf1.node_index < leaf2.node_index."""
         s_index = lambda node_index: self.nodes[node_index].get_sisters()[0].node_index
-        self._cherry_index_pairs = {
+        self.cherry_index_pairs = {
             (leaf_index, sister_index)
             for leaf_index in self.leaf_indices
             if (
@@ -267,7 +277,7 @@ class PerfectPhylogeny:
         the entry of the k-th state tuple corresponding to the node, where j is the i-th
         entry of perm_indices and k is the i-th entry of state_tuple_indices.
         """
-        r = lambda i: len(self._mutation_node_index_sets[i]) + 1
+        r = lambda i: len(self.mutation_node_index_sets[i]) + 1
         perm_fn = lambda r, i, x: self.state_permutations[r][i][x]
         return "".join(
             (
@@ -281,7 +291,7 @@ class PerfectPhylogeny:
         Returns the substitutions for the parent of the specified to the node. This
         follows the same format as the node_sequence method.
         """
-        r = lambda i: len(self._mutation_node_index_sets[i]) + 1
+        r = lambda i: len(self.mutation_node_index_sets[i]) + 1
         perm_fn = lambda r, i, x: self.state_permutations[r][i][x]
         subs = []
         if node_index != 0:
@@ -317,11 +327,11 @@ class PerfectPhylogeny:
 
     def perms_for_states(self, state_tuples_indices):
         """
-        Returns a tuple of tuples. The i-th inner tuple consists of the valid indices 
-        into self.state_permutations[r], where r is the number of different states 
+        Returns a tuple of tuples. The i-th inner tuple consists of the valid indices
+        into self.state_permutations[r], where r is the number of different states
         contained in the entry of self.state_tuples at index state_tuples_indices[i].
         """
-        r = lambda i: len(self._mutation_node_index_sets[i]) + 1
+        r = lambda i: len(self.mutation_node_index_sets[i]) + 1
         return tuple(
             tuple(range(len(self.state_permutations[r(i)])))
             for i in state_tuples_indices
@@ -333,7 +343,7 @@ class PerfectPhylogeny:
         self.mutation_node_index_sets (equivalently, the entries in self.state_tuples)
         giving a perfect phylogeny where every non-root node has at least one mutation.
         """
-        node_indices = (self._mutation_node_index_sets[i] for i in index_sets_indices)
+        node_indices = (self.mutation_node_index_sets[i] for i in index_sets_indices)
         subbed_node_count = len(set(chain(*node_indices)))
         return subbed_node_count == self.node_count - 1
 
@@ -345,18 +355,18 @@ class PerfectPhylogeny:
         mutation.
         """
         node_indices = (
-            self._mutation_internal_node_index_sets[i] for i in index_sets_indices
+            self.mutation_internal_node_index_sets[i] for i in index_sets_indices
         )
         subbed_node_count = len(set(chain(*node_indices)))
         return subbed_node_count == self.internal_node_count
 
     def are_cherries_distinct(self, index_sets_indices):
-        indices = (self._mutation_leaf_node_index_sets[i] for i in index_sets_indices)
+        indices = (self.mutation_leaf_node_index_sets[i] for i in index_sets_indices)
         subbed_leaves = set(chain(*indices))
         return all(
             (
                 left in subbed_leaves or right in subbed_leaves
-                for left, right in self._cherry_index_pairs
+                for left, right in self.cherry_index_pairs
             )
         )
 
