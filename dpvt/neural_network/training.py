@@ -3,6 +3,7 @@ from torch import nn
 from ete3 import Tree
 from traversal_nn import TraverseNN
 
+STATES = ["A", "G", "C", "T"]
 STATE_TO_IDX = {
     "A": 0,
     "G": 1,
@@ -112,8 +113,13 @@ bad_nwks = [
 
 good_trees = [Tree(nwk, format=8) for nwk in good_nwks]
 for tree in good_trees:
-    for n in tree.traverse():
-        n.sequence = n.name
+    for node in tree.traverse():
+        node.sequence = node.name
+    assign_features(tree)
+bad_trees = [Tree(nwk, format=8) for nwk in bad_nwks]
+for tree in bad_trees:
+    for node in tree.traverse():
+        node.sequence = node.name
     assign_features(tree)
 
 # tree without maximum parsimony
