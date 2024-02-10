@@ -159,18 +159,13 @@ class PerfectPhylogeny:
         left, right = self.tree.children
         left_index = left.node_index
         right_index = right.node_index
-        bad_patterns = [(left_index, right_index)]
+        self.bad_root_patterns = [{left_index, right_index}]
         if not left.is_leaf():
-            left_left_index, left_right_index = (x.node_index for x in left.children)
-            bad_patterns.append((right_index, left_left_index, left_right_index))
-            bad_patterns.append((right_index, left_index, left_left_index))
-            bad_patterns.append((right_index, left_index, left_right_index))
+            ll_index, lr_index = (x.node_index for x in left.children)
+            self.bad_root_patterns.append({right_index, ll_index, lr_index})
         if not right.is_leaf():
-            right_left_index, right_right_index = (x.node_index for x in right.children)
-            bad_patterns.append((left_index, right_left_index, right_right_index))
-            bad_patterns.append((left_index, right_index, right_left_index))
-            bad_patterns.append((left_index, right_index, right_right_index))
-        self.bad_root_patterns = {tuple(sorted(bad)) for bad in bad_patterns}
+            rl_index, rr_index = (x.node_index for x in right.children)
+            self.bad_root_patterns.append({left_index, rl_index, rr_index})
 
         return None
 
@@ -205,7 +200,9 @@ class PerfectPhylogeny:
             # preorder, we only need to check for n1 being the parent of n2 and n3.
             # If there are only two node indices instead of three, this pattern fails.
 
-            is_root_pattern = mut_node_indices in self.bad_root_patterns
+            is_root_pattern = any(
+                bad.issubset(mut_node_indices) for bad in self.bad_root_patterns
+            )
 
             return not (is_first_pattern or is_root_pattern)
 
