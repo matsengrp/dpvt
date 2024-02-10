@@ -33,10 +33,10 @@ $SCRIPT example2.nwk ex2_output_2_sites_unique_leaves.nwk --sub-on-all-internal 
 echo "Requiring subs on all non-terminal edges + unique leaf sequences..."
 $SCRIPT example2.nwk ex2_output_2_site_subs_on_internal.nwk --unique-leaves \
     --sub-on-all-internal --min-sites 2 --max-sites 2
-# Yields 150,336 phylogenies.
+# Yields 134,784 phylogenies.
 
 echo "Requiring subs on all edges..."
 $SCRIPT example2.nwk ex2_output_3_sites_subs_on_edges.nwk --sub-on-all-edges \
     --min-sites 3 --max-sites 3
-#Yields 11335680 phylogenies. phylogenies.
+#Yields 8,736,768 phylogenies.
 
