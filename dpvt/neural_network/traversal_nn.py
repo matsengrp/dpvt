@@ -38,7 +38,7 @@ class TraverseNN(nn.Module):
         """
         Takes an ete3.Tree as input and outputs a 0 or 1 to indicate whether the input 
         tree is maximally parsimonious or not, respectively, for the sequences assigned 
-        to the leaf nodes. Can also take a list of Trees as input
+        to the leaf nodes. Can also take a list of Trees as input.
         Args:
             input (Tree | list of Trees): has attribute feature_0 on each node, which is 
             a torch tensor that encodes the mutation between the node and its parent, 
@@ -49,12 +49,10 @@ class TraverseNN(nn.Module):
             return logit
         else:
             # assume input is a list(?) of trees
-            logits = [self.forward_on_tree(item) for item in input]
-            # logits = []
-            # for item in input:
-            #     logit = self.forward_on_tree(item)
-            #     logits.append(logit)
+            logits = tuple(self.forward_on_tree(item) for item in input)
             return torch.tensor(logits, requires_grad=True)
+            # logits = tuple(torch.tensor(x) for x in logits)
+            # return torch.stack(logits, dim=0)
 
     def forward_on_tree(self, tree: Tree):
         """
