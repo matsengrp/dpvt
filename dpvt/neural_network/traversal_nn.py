@@ -49,11 +49,12 @@ class TraverseNN(nn.Module):
             return logit
         else:
             # assume input is a list(?) of trees
-            logits = []
-            for item in input:
-                logit = self.forward_on_tree(item)
-                logits.append(logit)
-            return torch.tensor(logits)
+            logits = [self.forward_on_tree(item) for item in input]
+            # logits = []
+            # for item in input:
+            #     logit = self.forward_on_tree(item)
+            #     logits.append(logit)
+            return torch.tensor(logits, requires_grad=True)
 
     def forward_on_tree(self, tree: Tree):
         """
