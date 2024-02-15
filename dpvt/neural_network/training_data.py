@@ -39,47 +39,65 @@ def assign_features(tree):
     return None
 
 
+def nwk_list_from_pattern(temp):
+    nwks = [temp.replace("0", a).replace("1", b) for a, b in combinations(STATES, 2)]
+    return nwks
+
+def nwk_list_from_pattern_rev(temp):
+    nwks = [temp.replace("0", b).replace("1", a) for a, b in combinations(STATES, 2)]
+    return nwks
 
 good_template = "(0,(1,1)1)0;"
-good_nwks = [
-    good_template.replace("0", a).replace("1", b) for a, b in combinations(STATES, 2)
-]
+"""
+   /-0
+-0|
+  |   /-1
+   \1|
+      \-1
+"""
+good_nwks = nwk_list_from_pattern(good_template)
 # good_nwks = [
 #     "(A,(G,G)G)A;",
 #     "(A,(C,C)C)A;",
 #     ...
 # ]
 bad_template = "(1,(1,0)0)0;"
-bad_nwks = [bad_template.replace("0", a).replace("1", b) for a, b in combinations(STATES, 2)]
+"""
+   /-1
+-0|
+  |   /-1
+   \0|
+      \-0
+"""
+bad_nwks = nwk_list_from_pattern(bad_template)
 # bad_nwks = [
 #     "(G,(G,A)A)A;",
 #     "(C,(C,A)A)A;",
 #     ...
 # ]
 
-good_trees = [Tree(nwk, format=8) for nwk in good_nwks]
-for tree in good_trees:
-    for node in tree.traverse():
-        node.sequence = node.name
-    assign_features(tree)
-bad_trees = [Tree(nwk, format=8) for nwk in bad_nwks]
-for tree in bad_trees:
-    for node in tree.traverse():
-        node.sequence = node.name
-    assign_features(tree)
+def nwk_list_to_trees(nwks):
+    """
+    Takes a list of newick strings as input, and returns a list of corresponding trees,
+    where each tree is annotated by appropriate information for use in neural network
+    """
+    trees = [Tree(nwk, format=8) for nwk in nwks]
+    for tree in trees:
+        for node in tree.traverse():
+            node.sequence = node.name
+        assign_features(tree)
+    return trees
 
-good_test_trees = [
-    Tree(good_template.replace("0", b).replace("1", a), format=8) 
-    for a, b in combinations(STATES, 2)
-]
-bad_test_trees = [
-    Tree(bad_template.replace("0", b).replace("1", a), format=8) 
-    for a, b in combinations(STATES, 2)
-]
-for tree in good_test_trees + bad_test_trees:
-    for node in tree.traverse():
-        node.sequence = node.name
-    assign_features(tree)
+good_trees = nwk_list_to_trees(good_nwks)
+
+bad_trees = nwk_list_to_trees(bad_nwks)
+
+good_test_trees = nwk_list_to_trees(
+    nwk_list_from_pattern_rev(good_template)
+)
+bad_test_trees = nwk_list_to_trees(
+    nwk_list_from_pattern_rev(bad_template)
+)
 
 
 """
@@ -134,6 +152,9 @@ def mutation_count(tree):
 def leaf_state_count(tree):
     leaf_states = set(leaf.sequence for leaf in tree.get_leaves())
     return len(leaf_states)
+
+def homoplasy_count(tree):
+    return mutation_count(tree) - leaf_state_count(tree) + 1
 
 def is_perfect(tree):
     n_mutations = mutation_count(tree)
