@@ -1,5 +1,8 @@
 import random
-from itertools import combinations
+from itertools import (
+    combinations,
+    permutations,
+)
 
 import torch
 from ete3 import Tree
@@ -41,12 +44,8 @@ def assign_features(tree):
     return None
 
 
-def nwk_list_from_pattern(temp):
-    nwks = [temp.replace("0", a).replace("1", b) for a, b in combinations(STATES, 2)]
-    return nwks
-
-def nwk_list_from_pattern_rev(temp):
-    nwks = [temp.replace("0", b).replace("1", a) for a, b in combinations(STATES, 2)]
+def pattern_to_nwk_list(temp):
+    nwks = [temp.replace("0", a).replace("1", b) for a, b in permutations(STATES, 2)]
     return nwks
 
 good_template = "(0,(1,1)1)0;"
@@ -57,7 +56,7 @@ good_template = "(0,(1,1)1)0;"
    \1|
       \-1
 """
-good_nwks = nwk_list_from_pattern(good_template)
+good_nwks = pattern_to_nwk_list(good_template)
 # good_nwks = [
 #     "(A,(G,G)G)A;",
 #     "(A,(C,C)C)A;",
@@ -71,7 +70,7 @@ bad_template = "(1,(1,0)0)0;"
    \0|
       \-0
 """
-bad_nwks = nwk_list_from_pattern(bad_template)
+bad_nwks = pattern_to_nwk_list(bad_template)
 # bad_nwks = [
 #     "(G,(G,A)A)A;",
 #     "(C,(C,A)A)A;",
@@ -93,13 +92,6 @@ def nwk_list_to_trees(nwks):
 good_trees = nwk_list_to_trees(good_nwks)
 
 bad_trees = nwk_list_to_trees(bad_nwks)
-
-good_test_trees = nwk_list_to_trees(
-    nwk_list_from_pattern_rev(good_template)
-)
-bad_test_trees = nwk_list_to_trees(
-    nwk_list_from_pattern_rev(bad_template)
-)
 
 """
 convenience functions

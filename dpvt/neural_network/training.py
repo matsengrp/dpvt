@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 from dpvt.neural_network.traverse_nn import TraverseNN
 from dpvt.neural_network.training_data import (
     good_trees, bad_trees,
-    good_test_trees, bad_test_trees,
 )
 
 
@@ -18,9 +17,9 @@ n = 5
 loss_fn = nn.BCEWithLogitsLoss(reduction="sum")
 
 train_data = list(
-    zip(good_trees + good_test_trees[:-1], bad_trees + bad_test_trees[:-1])
+    zip(good_trees[:-1], bad_trees[:-1])
 )
-train_in = good_trees + good_test_trees[:-1] + bad_trees + bad_test_trees[:-1]
+train_in = good_trees[:-1] + bad_trees[:-1]
 train_out = [0. for _ in range(11)] + [1. for _ in range(11)]
 
 def get_model():
