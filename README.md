@@ -29,3 +29,11 @@ Be careful, there are many perfect phylogenies even for a very small topology.
 ...coming soon...
 
 
+## Neural network model
+
+We define a Pytorch module `TraverseNN` which evaluates whether edges in a given labeled tree appear in a maximum parsiomy tree, for the given sequences on the leaf nodes.
+This module is defined in `dpvt/traverse_nn.py`.
+
+The module works as follows:
+
+1. We assume the input tree has a `sequence` attribute on each node. 

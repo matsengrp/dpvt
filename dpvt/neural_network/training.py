@@ -3,7 +3,7 @@ from torch import nn
 from torch import optim
 import matplotlib.pyplot as plt
 from ete3 import Tree
-from traversal_nn import TraverseNN
+from dpvt.neural_network.traverse_nn import TraverseNN
 from training_data import (
     good_trees, bad_trees,
     good_test_trees, bad_test_trees,

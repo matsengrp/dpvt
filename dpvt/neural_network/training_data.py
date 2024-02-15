@@ -22,12 +22,10 @@ def assign_features(tree):
     Returns: None 
     """
     for node in tree.traverse():
-        if node.up is None:
-            # node is root
-            node.add_feature("feature_0", torch.zeros(4))
-        else:
-            # non-root node
-            mut_vec = [0, 0, 0, 0]
+        mut_vec = [0, 0, 0, 0]
+        if node.up is None: # node is root
+            pass
+        else: # non-root node
             try:
                 n_seq = node.sequence
                 mut_vec[STATE_TO_IDX[n_seq]] += 1
@@ -35,7 +33,11 @@ def assign_features(tree):
                 mut_vec[STATE_TO_IDX[p_seq]] -= 1
             except KeyError:
                 raise NotImplementedError(f"Each node sequence must be in {STATES}")
-            node.add_feature("feature_0", torch.tensor(mut_vec))
+        try:
+            node.to_parent["feature_0"] = torch.tensor(mut_vec)
+        except AttributeError:
+            node.add_feature("to_parent",{"feature_0": torch.tensor(mut_vec)})
+        # node.add_feature("feature_0", torch.tensor(mut_vec))
     return None
 
 
