@@ -2,9 +2,9 @@ import torch
 from torch import nn
 from torch import optim
 import matplotlib.pyplot as plt
-from ete3 import Tree
+
 from dpvt.neural_network.traverse_nn import TraverseNN
-from training_data import (
+from dpvt.neural_network.training_data import (
     good_trees, bad_trees,
     good_test_trees, bad_test_trees,
 )
@@ -12,23 +12,23 @@ from training_data import (
 
 # tnn = TraverseNN()
 lr = 0.05
-opt_lr = 0.05
 epochs = 20
 n = 5
 
 loss_fn = nn.BCEWithLogitsLoss(reduction="sum")
-# loss_fn = nn.MSELoss()
-
-def get_model():
-    model = TraverseNN()
-    return model, optim.SGD(model.parameters(), lr=opt_lr)
-
-tnn, opt = get_model()
-# print(loss_fn(tnn(xb), yb))
 
 train_data = list(
     zip(good_trees + good_test_trees[:-1], bad_trees + bad_test_trees[:-1])
 )
+train_in = good_trees + good_test_trees[:-1] + bad_trees + bad_test_trees[:-1]
+train_out = [0. for _ in range(11)] + [1. for _ in range(11)]
+
+def get_model():
+    model = TraverseNN()
+    return model, optim.SGD(model.parameters(), lr=lr)
+
+tnn, opt = get_model()
+# print("Untrained loss:", loss_fn(tnn(train_in[:2]), torch.tensor(train_out[:2])))
 
 # training loop
 def fit(verbose=True, log_out=True):

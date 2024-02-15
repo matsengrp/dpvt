@@ -14,9 +14,10 @@ STATE_TO_IDX = {
 
 def assign_features(tree):
     """
-    modifies input tree by adding attribute feature_0, which is a 4-element torch.tensor 
-    which records the mutation from the parent to child node,
-    e.g., a mutation `A -> T` is encoded as [-1, 0, 0, 1]
+    modifies input tree by adding a `to_parent` dict attribute, where 
+    `to_parent["feature_0"]` is a 4-element torch.tensor which records the mutation from 
+    the node's parent to the (child) node, e.g., a mutation `A -> T` is encoded as 
+    [-1, 0, 0, 1]
     Args:
         tree (ete3 Tree): has sequence attribute on each node
     Returns: None 
@@ -36,8 +37,7 @@ def assign_features(tree):
         try:
             node.to_parent["feature_0"] = torch.tensor(mut_vec)
         except AttributeError:
-            node.add_feature("to_parent",{"feature_0": torch.tensor(mut_vec)})
-        # node.add_feature("feature_0", torch.tensor(mut_vec))
+            node.add_feature("to_parent", {"feature_0": torch.tensor(mut_vec)})
     return None
 
 
@@ -101,36 +101,9 @@ bad_test_trees = nwk_list_to_trees(
     nwk_list_from_pattern_rev(bad_template)
 )
 
-
 """
-      /-G
-   /G|
--A|   \-G
-  |
-   \-A
+convenience functions
 """
-nwk = (
-    "((0[&&NHX:sequence=G],1[&&NHX:sequence=G])[&&NHX:sequence=G],2[&&NHX:sequence=A])["
-    "&&NHX:sequence=A];"
-)
-test_good = Tree(nwk)
-assign_features(test_good)
-
-
-nwk = (
-    "((0[&&NHX:sequence=G],1[&&NHX:sequence=A])[&&NHX:sequence=G],2[&&NHX:sequence=A])["
-    "&&NHX:sequence=G];"
-)
-"""
-      /-G
-   /G|
--G|   \-A
-  |
-   \-A
-"""
-test_bad = Tree(nwk)
-assign_features(test_bad)
-
 
 def random_state_assignment(tree):
     """returns a new tree which has the same topology as the input tree, but with 
