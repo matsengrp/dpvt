@@ -5,9 +5,9 @@ from ete3 import Tree
 
 class TraverseNN(nn.Module):
     """
-    A pytorch module which takes an ete3.Tree as input and outputs a 0 or 1 to indicate
-    whether the input tree is maximally parsimonious or not, respectively, for the 
-    sequences assigned to the leaf nodes.
+    A pytorch module which takes a list of ete3.Trees as input and outputs 0's and 1's 
+    to indicate whether each input tree is maximally parsimonious or not, respectively, 
+    for the sequences assigned to the leaf nodes.
 
     The forward function applies two traversals to the input tree, first root-ward and 
     then leaf-ward.
@@ -34,25 +34,25 @@ class TraverseNN(nn.Module):
 
         # self.loss = nn.BCEWithLogitsLoss()
 
-    def forward(self, input):
+    def forward(self, input, type_matching=False):
         """
-        Takes an ete3.Tree as input and outputs a 0 or 1 to indicate whether the input 
-        tree is maximally parsimonious or not, respectively, for the sequences assigned 
-        to the leaf nodes. Can also take a list of Trees as input.
+        Takes an interable of ete3.Tree as input and outputs a tensor of 0's and 1's to 
+        indicate whether each input tree is maximally parsimonious or not, respectively, 
+        for the sequences assigned to the leaf nodes. 
         Args:
             input (Tree | list of Trees): has attribute feature_0 on each node, which is 
-            a torch tensor that encodes the mutation between the node and its parent, 
-            e.g. A -> G is encoded by [-1, 1, 0, 0]
+                a torch tensor that encodes the mutation between the node and its 
+                parent, e.g. A -> G is encoded by [-1, 1, 0, 0]
+            type_matching (boolean): if True, also allows single ete3 Tree as input
         """
-        if type(input) == Tree:
-            logit = self.forward_on_tree(input)
-            return logit
-        else:
-            # assume input is a list(?) of trees
-            logits = tuple(self.forward_on_tree(item) for item in input)
-            return torch.tensor(logits, requires_grad=True)
-            # logits = tuple(torch.tensor(x) for x in logits)
-            # return torch.stack(logits, dim=0)
+        if type_matching:
+            if type(input) == Tree:
+                logit = self.forward_on_tree(input)
+                return logit
+        # assume input is a list (or iterable) of trees
+        logits = torch.cat([self.forward_on_tree(item) for item in input])
+        return logits
+        # return torch.stack(logits, dim=0)
 
     def forward_on_tree(self, tree: Tree):
         """
@@ -64,7 +64,7 @@ class TraverseNN(nn.Module):
                 tensor that encodes the mutation between the node and its parent, e.g. 
                 A -> G is encoded by [-1, 1, 0, 0]
         """
-        tree = tree.copy()
+        # tree = tree.copy()
         # root-ward traversal
         for node in tree.traverse(strategy="postorder"):
             if node.is_leaf(): 
