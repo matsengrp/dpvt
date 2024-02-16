@@ -82,16 +82,18 @@ class TraverseNN(nn.Module):
                 right_feature_1 = child2.to_parent["feature_1"]
                 left_data = torch.cat((left_feature_0, left_feature_1))
                 right_data = torch.cat((right_feature_0, right_feature_1))
-                # pass concatentation of feature vectors of children in both orders,
-                # `(x, y)` and `(y, x)` and add outputs, to apply symmetry constraint
-                node.to_parent["feature_1"] = self.up_traverse_stack(
-                    torch.cat((left_data, right_data))
-                )
-                node.to_parent["feature_1"] += self.up_traverse_stack(
-                    torch.cat((right_data, left_data))
-                )
+                node.to_parent["feature_1"] = self.node_aggregate(left_data, right_data)
         # leaf-ward traversal -> skip for now
         # logits = self.up_traverse_stack(x)
         # feed root feature into final layer
         logit = self.final(tree.to_parent["feature_1"])
         return logit
+
+    def node_aggregate(self, left_data, right_data):
+        """
+        pass concatentation of feature vectors in both orders, `(left, right)` and
+        `(right, left)` and add outputs, to apply symmetry constraint
+        """
+        output = self.up_traverse_stack(torch.cat((left_data, right_data)))
+        output += self.up_traverse_stack(torch.cat((right_data, left_data)))
+        return output

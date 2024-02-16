@@ -4,7 +4,6 @@ from torch import optim
 from torch.utils.data import (
     random_split,
     dataset,
-    Dataset,
     DataLoader,
 )
 import matplotlib.pyplot as plt
@@ -18,7 +17,7 @@ from dpvt.neural_network.training_data import (
 
 # tnn = TraverseNN()
 lr = 0.05
-epochs = 20
+epochs = 40
 n = 5
 
 loss_fn = nn.BCEWithLogitsLoss(reduction="sum")
@@ -36,14 +35,12 @@ class FourLeafData(dataset.Dataset):
         return len(self.data)
 
 
-# four_leaf_data = Dataset.from_dict({
-#     "data": good_trees + bad_trees,
-#     "label": [0.0 for _ in range(12)] + [1.0 for _ in range(12)]
-# })
-
-
 def custom_collate(items):
-    # print("debugging:", items)
+    """
+    Args:
+        items is a list of (input, output) pairs, where `input` is an ete3.Tree and
+        `output` is a float
+    """
     return [item[0] for item in items], torch.tensor([item[1] for item in items])
 
 
@@ -68,9 +65,10 @@ print(
 
 
 # training loop
-def fit(verbose=True, log_out=True):
+def fit(verbose=True, log_out=True, return_validation=False):
     # set tnn to train mode
     log = []
+    valid_data = []
     for ep in range(epochs):
         tnn.train()
         for xb, yb in train_loader:
@@ -91,18 +89,18 @@ def fit(verbose=True, log_out=True):
         tnn.eval()
         with torch.no_grad():
             valid_loss = sum(loss_fn(tnn(xb), yb) for xb, yb in test_loader)
+            valid_data.append(valid_loss)
             print("validation loss:", valid_loss)
         if verbose:
             print(f"end epoch {ep + 1}")
-    if log_out:
-        return log
-
-
-# fit()
+    # if log_out:
+    #     return log
+    if return_validation:
+        return valid_data
 
 
 def fit_and_plot(out_file="test.pdf"):
-    log = fit()
+    log = fit(return_validation=True)
     fig, ax = plt.subplots()
     ax.plot(log)
     fig.savefig(out_file)
