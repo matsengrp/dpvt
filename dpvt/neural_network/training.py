@@ -1,6 +1,12 @@
 import torch
 from torch import nn
 from torch import optim
+from torch.utils.data import (
+    random_split,
+    dataset,
+    Dataset,
+    DataLoader,
+)
 import matplotlib.pyplot as plt
 
 from dpvt.neural_network.traverse_nn import TraverseNN
@@ -17,9 +23,33 @@ n = 5
 
 loss_fn = nn.BCEWithLogitsLoss(reduction="sum")
 
-train_data = list(zip(good_trees[:-1], bad_trees[:-1]))
-train_in = good_trees[:-1] + bad_trees[:-1]
-train_out = [0.0 for _ in range(11)] + [1.0 for _ in range(11)]
+
+class FourLeafData(dataset.Dataset):
+    def __init__(self):
+        self.data = good_trees + bad_trees
+        self.labels = [0.0 for _ in range(12)] + [1.0 for _ in range(12)]
+
+    def __getitem__(self, index):
+        return self.data[index], self.labels[index]
+
+    def __len__(self):
+        return len(self.data)
+
+
+# four_leaf_data = Dataset.from_dict({
+#     "data": good_trees + bad_trees,
+#     "label": [0.0 for _ in range(12)] + [1.0 for _ in range(12)]
+# })
+
+
+def custom_collate(items):
+    # print("debugging:", items)
+    return [item[0] for item in items], torch.tensor([item[1] for item in items])
+
+
+train_data, test_data = random_split(FourLeafData(), [20, 4])
+train_loader = DataLoader(train_data, batch_size=2, collate_fn=custom_collate)
+test_loader = DataLoader(test_data, batch_size=2, collate_fn=custom_collate)
 
 
 def get_model():
@@ -28,33 +58,42 @@ def get_model():
 
 
 tnn, opt = get_model()
-# print("Untrained loss:", loss_fn(tnn(train_in[:2]), torch.tensor(train_out[:2])))
+print(
+    "Untrained loss:",
+    loss_fn(
+        tnn(train_data[i][0] for i in range(5)),
+        torch.tensor([train_data[i][1] for i in range(5)]),
+    ),
+)
 
 
 # training loop
 def fit(verbose=True, log_out=True):
     # set tnn to train mode
-    tnn.train()
     log = []
     for ep in range(epochs):
-        for i, xb in enumerate(train_data):
+        tnn.train()
+        for xb, yb in train_loader:
             opt.zero_grad()
-            # xb = [good_trees[i], bad_trees[i]]
-            yb = torch.tensor([0.0, 1.0])
 
             # compute prediction and loss
             pred = tnn(xb)
             loss = loss_fn(pred, yb)
-            if verbose and i == 0:
-                print("prediction:", pred.tolist())
-                print("loss:", loss.item())
+            # if verbose and i == 0:
+            #     print("prediction:", pred.tolist())
+            #     print("loss:", loss.item())
             if log_out:
                 log.append(loss.item())
 
             loss.backward()
             opt.step()
+        # validation step
+        tnn.eval()
+        with torch.no_grad():
+            valid_loss = sum(loss_fn(tnn(xb), yb) for xb, yb in test_loader)
+            print("validation loss:", valid_loss)
         if verbose:
-            print(f"end epoch {ep}")
+            print(f"end epoch {ep + 1}")
     if log_out:
         return log
 
