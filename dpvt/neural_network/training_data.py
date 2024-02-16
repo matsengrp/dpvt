@@ -8,28 +8,24 @@ import torch
 from ete3 import Tree
 
 STATES = ["A", "G", "C", "T"]
-STATE_TO_IDX = {
-    "A": 0,
-    "G": 1,
-    "C": 2,
-    "T": 3
-}
+STATE_TO_IDX = {"A": 0, "G": 1, "C": 2, "T": 3}
+
 
 def assign_features(tree):
     """
-    modifies input tree by adding a `to_parent` dict attribute, where 
-    `to_parent["feature_0"]` is a 4-element torch.tensor which records the mutation from 
-    the node's parent to the (child) node, e.g., a mutation `A -> T` is encoded as 
+    modifies input tree by adding a `to_parent` dict attribute, where
+    `to_parent["feature_0"]` is a 4-element torch.tensor which records the mutation from
+    the node's parent to the (child) node, e.g., a mutation `A -> T` is encoded as
     [-1, 0, 0, 1]
     Args:
         tree (ete3 Tree): has sequence attribute on each node
-    Returns: None 
+    Returns: None
     """
     for node in tree.traverse():
         mut_vec = [0, 0, 0, 0]
-        if node.up is None: # node is root
+        if node.up is None:  # node is root
             pass
-        else: # non-root node
+        else:  # non-root node
             try:
                 n_seq = node.sequence
                 mut_vec[STATE_TO_IDX[n_seq]] += 1
@@ -47,6 +43,7 @@ def assign_features(tree):
 def pattern_to_nwk_list(temp):
     nwks = [temp.replace("0", a).replace("1", b) for a, b in permutations(STATES, 2)]
     return nwks
+
 
 good_template = "(0,(1,1)1)0;"
 """
@@ -77,6 +74,7 @@ bad_nwks = pattern_to_nwk_list(bad_template)
 #     ...
 # ]
 
+
 def nwk_list_to_trees(nwks):
     """
     Takes a list of newick strings as input, and returns a list of corresponding trees,
@@ -89,6 +87,7 @@ def nwk_list_to_trees(nwks):
         assign_features(tree)
     return trees
 
+
 good_trees = nwk_list_to_trees(good_nwks)
 
 bad_trees = nwk_list_to_trees(bad_nwks)
@@ -97,8 +96,9 @@ bad_trees = nwk_list_to_trees(bad_nwks)
 convenience functions
 """
 
+
 def random_state_assignment(tree):
-    """returns a new tree which has the same topology as the input tree, but with 
+    """returns a new tree which has the same topology as the input tree, but with
     random node sequences and names"""
     tree = tree.copy()
     for node in tree:
@@ -106,6 +106,7 @@ def random_state_assignment(tree):
         node.name = s
         node.sequence = s
     return tree
+
 
 def mutation_count(tree):
     assign_features(tree)
@@ -116,12 +117,15 @@ def mutation_count(tree):
             count += 1
     return count
 
+
 def leaf_state_count(tree):
     leaf_states = set(leaf.sequence for leaf in tree.get_leaves())
     return len(leaf_states)
 
+
 def homoplasy_count(tree):
     return mutation_count(tree) - leaf_state_count(tree) + 1
+
 
 def is_perfect(tree):
     n_mutations = mutation_count(tree)
