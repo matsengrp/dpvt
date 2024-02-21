@@ -47,8 +47,10 @@ test_loader = DataLoader(test_data, batch_size=2, collate_fn=custom_collate)
 tnn = TraverseNN()
 trainer = L.Trainer(max_epochs=epochs)
 
+
 def run():
     trainer.fit(tnn, train_loader, test_loader)
+
 
 if __name__ == "__main__":
     run()
