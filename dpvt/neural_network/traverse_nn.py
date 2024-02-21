@@ -71,10 +71,10 @@ class TraverseNN(L.LightningModule):
         if not optimized:
             if type(input) == Tree:
                 logit = self.forward_on_tree(input)
-                return logit
+                return F.sigmoid(logit)
         # assume input is a list (or iterable) of trees
         logits = torch.cat([self.forward_on_tree(item) for item in input])
-        return logits
+        return F.sigmoid(logits)
         # return torch.stack(logits, dim=0)
 
     def forward_on_tree(self, tree: Tree):
