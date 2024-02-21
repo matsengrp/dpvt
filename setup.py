@@ -13,6 +13,7 @@ setup(
     install_requires=[
         "click",
         "ete3 >= 3.0.0",
+        "lightning >= 2.2.0",
         "pytest >= 7.3",
         "torch >= 2.0.0",
     ],
