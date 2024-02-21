@@ -28,8 +28,12 @@ def assign_features(tree):
         else:  # non-root node
             try:
                 n_seq = node.sequence
-                mut_vec[STATE_TO_IDX[n_seq]] += 1
                 p_seq = node.up.sequence
+            except AttributeError:
+                n_seq = node.name
+                p_seq = node.up.name
+            try:
+                mut_vec[STATE_TO_IDX[n_seq]] += 1
                 mut_vec[STATE_TO_IDX[p_seq]] -= 1
             except KeyError:
                 raise NotImplementedError(f"Each node sequence must be in {STATES}")

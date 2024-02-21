@@ -71,6 +71,10 @@ class TraverseNN(nn.Module):
         for node in tree.traverse(strategy="postorder"):
             if node.is_leaf():
                 node.to_parent["feature_1"] = torch.zeros(4)
+            elif len(node.children) == 1:  # node is root with signle child
+                assert node.up is None
+                child = node.children[0]
+                node.to_parent["feature_1"] = child.to_parent["feature_1"]
             else:
                 try:
                     child1, child2 = node.children
