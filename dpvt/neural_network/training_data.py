@@ -51,11 +51,11 @@ def pattern_to_nwk_list(temp):
 
 good_template = "((0,(1,1)1)0)0;"
 """
-   /-0
--0|
-  |   /-1
-   \1|
-      \-1
+      /-0
+-0/-0|
+     |   /-1
+      \1|
+         \-1
 """
 good_nwks = pattern_to_nwk_list(good_template)
 # good_nwks = [
@@ -65,11 +65,11 @@ good_nwks = pattern_to_nwk_list(good_template)
 # ]
 bad_template = "((1,(1,0)0)0)0;"
 """
-   /-1
--0|
-  |   /-1
-   \0|
-      \-0
+      /-1
+-0/-0|
+     |   /-1
+      \0|
+         \-0
 """
 bad_nwks = pattern_to_nwk_list(bad_template)
 # bad_nwks = [

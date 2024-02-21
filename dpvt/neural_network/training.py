@@ -1,6 +1,4 @@
 import torch
-from torch import nn
-from torch import optim
 from torch.utils.data import (
     random_split,
     dataset,
@@ -16,12 +14,8 @@ from dpvt.neural_network.training_data import (
 )
 
 
-# tnn = TraverseNN()
-lr = 0.05
-epochs = 40
-n = 5
-
-loss_fn = nn.BCEWithLogitsLoss(reduction="sum")
+# hyperparameters
+epochs = 100
 
 
 class FourLeafData(dataset.Dataset):
@@ -51,7 +45,7 @@ test_loader = DataLoader(test_data, batch_size=2, collate_fn=custom_collate)
 
 # use pytorch lightning
 tnn = TraverseNN()
-trainer = L.Trainer(max_epochs=100)
+trainer = L.Trainer(max_epochs=epochs)
 
 def run():
     trainer.fit(tnn, train_loader, test_loader)
