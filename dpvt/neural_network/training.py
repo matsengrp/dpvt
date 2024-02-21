@@ -52,5 +52,9 @@ test_loader = DataLoader(test_data, batch_size=2, collate_fn=custom_collate)
 # use pytorch lightning
 tnn = TraverseNN()
 trainer = L.Trainer(max_epochs=100)
-if __name__ == "__main__":
+
+def run():
     trainer.fit(tnn, train_loader, test_loader)
+
+if __name__ == "__main__":
+    run()
