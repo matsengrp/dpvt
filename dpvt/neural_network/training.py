@@ -5,6 +5,7 @@ from torch.utils.data import (
     DataLoader,
 )
 import lightning as L
+import lightning as L
 import matplotlib.pyplot as plt
 
 from dpvt.neural_network.traverse_nn import TraverseNN
@@ -48,6 +49,10 @@ tnn = TraverseNN()
 trainer = L.Trainer(max_epochs=epochs)
 
 def run():
+    trainer.fit(tnn, train_loader, test_loader)
+
+if __name__ == "__main__":
+    run()
     trainer.fit(tnn, train_loader, test_loader)
 
 if __name__ == "__main__":
