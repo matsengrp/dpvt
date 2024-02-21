@@ -1,9 +1,10 @@
 import torch
 from torch import nn
+import lightning as L
 from ete3 import Tree
 
 
-class TraverseNN(nn.Module):
+class TraverseNN(L.LightningModule):
     """
     A pytorch module which takes a list of ete3.Trees as input and outputs 0's and 1's
     to indicate whether each input tree is maximally parsimonious or not, respectively,
@@ -21,6 +22,8 @@ class TraverseNN(nn.Module):
 
     def __init__(self):
         super().__init__()
+        # learning rate
+        self.lr = 0.05
         self.up_traverse_stack = nn.Sequential(
             nn.Linear(16, 32),
             nn.ReLU(),
@@ -34,6 +37,16 @@ class TraverseNN(nn.Module):
         self.final = nn.Linear(4, 1)
 
         # self.loss = nn.BCEWithLogitsLoss()
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.SGD(self.parameters, lr=self.lr)
+        return optimizer
+
+    def training_step(self, train_batch, batch_idx):
+        pass
+
+    def validation_step(self, val_batch, batch_idx):
+        pass
 
     def forward(self, input, optimized=False):
         """
