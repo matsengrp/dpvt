@@ -41,9 +41,9 @@ class TraverseNN(nn.Module):
         indicate whether each input tree is maximally parsimonious or not, respectively,
         for the sequences assigned to the leaf nodes.
         Args:
-            input (list of Trees): has attribute feature_0 on each node, which is a
-                torch tensor that encodes the mutation between the node and its parent,
-                e.g. A -> G is encoded by [-1, 1, 0, 0]
+            input (list of Trees): has attribute to_parent["feature_0"] on each node,
+                which is a torch tensor that encodes the mutation between the node and
+                its parent, e.g. A -> G is encoded by [-1, 1, 0, 0]
             optimized (boolean): if True, runs more efficiently by skipping type check
                 that allows ete.Tree input
         """
@@ -62,9 +62,9 @@ class TraverseNN(nn.Module):
         tree is maximally parsimonious or not, respectively, for the sequences assigned
         to the leaf nodes.
         Args:
-            tree (ete3 Tree): has attribute feature_0 on each node, which is a torch
-                tensor that encodes the mutation between the node and its parent, e.g.
-                A -> G is encoded by [-1, 1, 0, 0]
+            tree (ete3 Tree): each node has a torch tensor attribute
+                to_parent["feature_0"] that encodes the mutation between the node and
+                its parent, e.g. A -> G is encoded by [-1, 1, 0, 0]
         """
         # tree = tree.copy()
         # root-ward traversal

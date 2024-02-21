@@ -1,7 +1,6 @@
-from dpvt.scripts.perfect_phylogeny import (
-    PerfectPhylogeny
-)
+from dpvt.scripts.perfect_phylogeny import PerfectPhylogeny
 from ete3 import Tree
+
 
 def test_3_leaf_1_site():
     t = Tree("((0,1),2);")
@@ -11,7 +10,7 @@ def test_3_leaf_1_site():
         use_sub=False,
         unique_leaves=True,
         sub_on_all_internal=True,
-        max_sites=1
+        max_sites=1,
     )
     tree_list = list(tree_gen)
     assert len(tree_list) == 120
@@ -21,6 +20,7 @@ def test_3_leaf_1_site():
     )
     assert tree_list[0].write(format=9, features=["sequence"]) == expected_newick
 
+
 def test_5_leaf_2_sites():
     t = Tree("(0,(1,((2,3),4)));")
     pp = PerfectPhylogeny(t)
@@ -29,7 +29,7 @@ def test_5_leaf_2_sites():
         use_sub=True,
         unique_leaves=True,
         sub_on_all_internal=True,
-        max_sites=2
+        max_sites=2,
     )
     expected_newick = (
         "(0[&&NHX:subs={}],(1[&&NHX:subs={}],((2[&&NHX:subs={C1T}],3[&&NHX:subs={}])[&&"

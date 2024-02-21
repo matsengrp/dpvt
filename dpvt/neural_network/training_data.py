@@ -36,7 +36,7 @@ def assign_features(tree):
                 mut_vec[STATE_TO_IDX[n_seq]] += 1
                 mut_vec[STATE_TO_IDX[p_seq]] -= 1
             except KeyError:
-                raise NotImplementedError(f"Each node sequence must be in {STATES}")
+                raise ValueError(f"Each node sequence must be in {STATES}")
         try:
             node.to_parent["feature_0"] = torch.tensor(mut_vec)
         except AttributeError:
@@ -116,7 +116,7 @@ def mutation_count(tree):
     assign_features(tree)
     count = 0
     for node in tree.traverse():
-        x = node.feature_0
+        x = node.to_parent["feature_0"]
         if torch.count_nonzero(x).item() > 0:
             count += 1
     return count
