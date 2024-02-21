@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+import torch.nn.functional as F
 import lightning as L
 from ete3 import Tree
 
@@ -39,14 +40,21 @@ class TraverseNN(L.LightningModule):
         # self.loss = nn.BCEWithLogitsLoss()
 
     def configure_optimizers(self):
-        optimizer = torch.optim.SGD(self.parameters, lr=self.lr)
+        optimizer = torch.optim.SGD(self.parameters(), lr=self.lr)
         return optimizer
 
     def training_step(self, train_batch, batch_idx):
-        pass
+        xb, yb = train_batch
+        pred = torch.cat([self.forward_on_tree(item) for item in xb])
+        loss = F.binary_cross_entropy_with_logits(pred, yb)
+        self.log("train_loss", loss, batch_size=len(xb), on_epoch=True)
+        return loss
 
     def validation_step(self, val_batch, batch_idx):
-        pass
+        xb, yb = val_batch
+        pred = torch.cat([self.forward_on_tree(item) for item in xb])
+        loss = F.binary_cross_entropy_with_logits(pred, yb)
+        self.log("val_loss", loss, batch_size=len(xb))
 
     def forward(self, input, optimized=False):
         """
