@@ -6,6 +6,7 @@ from torch.utils.data import (
     dataset,
     DataLoader,
 )
+import lightning as L
 import matplotlib.pyplot as plt
 
 from dpvt.neural_network.traverse_nn import TraverseNN
@@ -48,7 +49,15 @@ train_data, test_data = random_split(FourLeafData(), [20, 4])
 train_loader = DataLoader(train_data, batch_size=2, collate_fn=custom_collate)
 test_loader = DataLoader(test_data, batch_size=2, collate_fn=custom_collate)
 
+# use pytorch lightning
+tnn = TraverseNN()
+trainer = L.Trainer()
+trainer.fit(tnn, train_loader, test_loader)
 
+
+"""
+without pytorch lightning
+"""
 def get_model():
     model = TraverseNN()
     return model, optim.SGD(model.parameters(), lr=lr)
