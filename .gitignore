@@ -162,6 +162,4 @@ cython_debug/
 *.nwk
 
 # pytorch-lightning logs
-*.ckpt
-*.tfevents*
-*hparams.yaml
+lightning_logs/
