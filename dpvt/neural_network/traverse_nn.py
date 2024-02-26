@@ -1,9 +1,11 @@
 import torch
 from torch import nn
+import torch.nn.functional as F
+import lightning as L
 from ete3 import Tree
 
 
-class TraverseNN(nn.Module):
+class TraverseNN(L.LightningModule):
     """
     A pytorch module which takes a list of ete3.Trees as input and outputs 0's and 1's
     to indicate whether each input tree is maximally parsimonious or not, respectively,
@@ -21,6 +23,8 @@ class TraverseNN(nn.Module):
 
     def __init__(self):
         super().__init__()
+        # learning rate
+        self.lr = 0.05
         self.up_traverse_stack = nn.Sequential(
             nn.Linear(16, 32),
             nn.ReLU(),
@@ -34,6 +38,23 @@ class TraverseNN(nn.Module):
         self.final = nn.Linear(4, 1)
 
         # self.loss = nn.BCEWithLogitsLoss()
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.SGD(self.parameters(), lr=self.lr)
+        return optimizer
+
+    def training_step(self, train_batch, batch_idx):
+        xb, yb = train_batch
+        pred = torch.cat([self.forward_on_tree(item) for item in xb])
+        loss = F.binary_cross_entropy_with_logits(pred, yb)
+        self.log("train_loss", loss, batch_size=len(xb), on_epoch=True)
+        return loss
+
+    def validation_step(self, val_batch, batch_idx):
+        xb, yb = val_batch
+        pred = torch.cat([self.forward_on_tree(item) for item in xb])
+        loss = F.binary_cross_entropy_with_logits(pred, yb)
+        self.log("val_loss", loss, batch_size=len(xb))
 
     def forward(self, input, optimized=False):
         """
@@ -50,10 +71,10 @@ class TraverseNN(nn.Module):
         if not optimized:
             if type(input) == Tree:
                 logit = self.forward_on_tree(input)
-                return logit
+                return F.sigmoid(logit)
         # assume input is a list (or iterable) of trees
         logits = torch.cat([self.forward_on_tree(item) for item in input])
-        return logits
+        return F.sigmoid(logits)
         # return torch.stack(logits, dim=0)
 
     def forward_on_tree(self, tree: Tree):
