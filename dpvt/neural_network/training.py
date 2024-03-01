@@ -5,6 +5,7 @@ from torch.utils.data import (
     DataLoader,
 )
 import lightning as L
+from pytorch_lightning.loggers import TensorBoardLogger
 import matplotlib.pyplot as plt
 
 from dpvt.neural_network.traverse_nn import TraverseNN
@@ -21,7 +22,7 @@ epochs = 100
 class FourLeafData(dataset.Dataset):
     def __init__(self):
         self.data = good_trees + bad_trees
-        self.labels = [0.0 for _ in range(12)] + [1.0 for _ in range(12)]
+        self.labels = [0.0 for _ in range(24)] + [1.0 for _ in range(24)]
 
     def __getitem__(self, index):
         return self.data[index], self.labels[index]
@@ -38,14 +39,18 @@ def custom_collate(items):
     """
     return [item[0] for item in items], torch.tensor([item[1] for item in items])
 
-
-train_data, test_data = random_split(FourLeafData(), [20, 4])
+train_data, test_data = random_split(FourLeafData(), [40, 8])
 train_loader = DataLoader(train_data, batch_size=2, collate_fn=custom_collate)
 test_loader = DataLoader(test_data, batch_size=2, collate_fn=custom_collate)
 
 # use pytorch lightning
 tnn = TraverseNN()
-trainer = L.Trainer(max_epochs=epochs)
+logger = TensorBoardLogger("lightning_logs", name="TNN_augmented_v0")
+trainer = L.Trainer(
+    logger=logger,
+    max_epochs=epochs,
+    log_every_n_steps=1,
+)
 
 
 def run():
