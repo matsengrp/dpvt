@@ -49,16 +49,9 @@ def pattern_to_nwk_list(temp):
     return nwks
 
 def reflect_tree(tree):
-    """returns a new tree which has the same topology as the input tree, but reflected by swapping the branches at each bifurcating internal node.
+    """returns a new tree which has the same topology as the input tree, 
+    but reflected by swapping the branches at each bifurcating internal node.
     """
-    reflected_tree = tree.copy()
-    for node in reflected_tree.traverse():
-        if len(node.get_children()) == 2:
-            node.children[0], node.children[1] = node.children[1], node.children[0]
-    return reflected_tree
-
-def reflect_tree(tree):
-    """returns a new tree which has the same topology as the input tree, but reflected by swapping the branches at each bifurcating internal node."""
     reflected_tree = tree.copy()
     for node in reflected_tree.traverse():
         if len(node.get_children()) == 2:
