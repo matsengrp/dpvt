@@ -43,7 +43,7 @@ def run(
     """
     Args:
         input_file: contains newick strings for unlabelled topologies, one on each line
-        output_file: file to write perfect phylogenies, in extended newick format, one 
+        output_file: file to write perfect phylogenies, in extended newick format, one
             per line
     """
     newick_format = {

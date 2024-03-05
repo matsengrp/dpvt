@@ -1,8 +1,10 @@
+from ete3 import Tree
 from dpvt.neural_network.training_data import (
     good_trees,
     bad_trees,
     mutation_count,
     is_perfect,
+    reflect_tree,
 )
 
 
@@ -18,3 +20,8 @@ def test_is_perfect():
         assert is_perfect(tree)
     for tree in bad_trees:
         assert not is_perfect(tree)
+
+def test_reflect():
+    tree = Tree("(a,(b,c));")
+    r_tree = reflect_tree(tree)
+    assert r_tree.write(format=9) == "((c,b),a);"

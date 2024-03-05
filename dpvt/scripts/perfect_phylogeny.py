@@ -25,8 +25,8 @@ class PerfectPhylogeny:
         tree (ete3.Tree): The topology.
         states (list): The allowed characters in sequences.
         state_count (int): The number of states.
-        nodes (list of ete3.Trees): List of all nodes of the topology in preorder 
-            traversal. The node indices used throughout this class are indices into this 
+        nodes (list of ete3.Trees): List of all nodes of the topology in preorder
+            traversal. The node indices used throughout this class are indices into this
             list. Note the root always has node index 0.
         node_count (int): The nunber of nodes in the topology.
         node_index (dict): A dictionary mapping a node of the topology to its index in
@@ -35,8 +35,8 @@ class PerfectPhylogeny:
         leaf_count (int): The number of leaf nodes in the topology.
         state_permutations (dict): A dictionary mapping an integer r to the list of
             permutations using r elements of self.states.
-        mutation_node_index_lists (list of tuples): Each inner tuple gives the indices 
-            of nodes where mutations occur, such that the mutations can be chosen to 
+        mutation_node_index_lists (list of tuples): Each inner tuple gives the indices
+            of nodes where mutations occur, such that the mutations can be chosen to
             produce a perfect phylogeny.
         state_lists (list of lists): Each inner list is of length
             self.node_count, with the entry at a given node_index being an integer from

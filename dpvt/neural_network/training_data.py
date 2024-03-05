@@ -48,6 +48,16 @@ def pattern_to_nwk_list(temp):
     nwks = [temp.replace("0", a).replace("1", b) for a, b in permutations(STATES, 2)]
     return nwks
 
+def reflect_tree(tree):
+    """returns a new tree which has the same topology as the input tree, 
+    but reflected by swapping the branches at each bifurcating internal node.
+    """
+    reflected_tree = tree.copy()
+    for node in reflected_tree.traverse():
+        if len(node.get_children()) == 2:
+            node.children[0], node.children[1] = node.children[1], node.children[0]
+    return reflected_tree
+
 
 good_template = "((0,(1,1)1)0)0;"
 """
@@ -85,12 +95,12 @@ def nwk_list_to_trees(nwks):
     where each tree is annotated by appropriate information for use in neural network
     """
     trees = [Tree(nwk, format=8) for nwk in nwks]
+    trees += [reflect_tree(tree) for tree in trees]
     for tree in trees:
         for node in tree.traverse():
             node.sequence = node.name
         assign_features(tree)
     return trees
-
 
 good_trees = nwk_list_to_trees(good_nwks)
 

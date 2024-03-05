@@ -120,5 +120,5 @@ class TraverseNN(L.LightningModule):
         `(right, left)` and add outputs, to apply symmetry constraint
         """
         output = self.up_traverse_stack(torch.cat((left_data, right_data)))
-        output += self.up_traverse_stack(torch.cat((right_data, left_data)))
+        # output += self.up_traverse_stack(torch.cat((right_data, left_data)))
         return output
