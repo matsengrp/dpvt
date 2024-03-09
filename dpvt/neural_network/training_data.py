@@ -14,33 +14,36 @@ STATE_TO_IDX = {"A": 0, "G": 1, "C": 2, "T": 3}
 def assign_features(tree):
     """
     modifies input tree by adding a `to_parent` dict attribute, where
-    `to_parent["feature_0"]` is a 4-element torch.tensor which records the mutation from
+    `to_parent["feature_0"]` is a m-by-4 torch.tensor which records the mutation from
     the node's parent to the (child) node, e.g., a mutation `A -> T` is encoded as
-    [-1, 0, 0, 1]
+    [...,[-1, 0, 0, 1],...]
     Args:
         tree (ete3 Tree): has sequence attribute on each node
     Returns: None
     """
-    for node in tree.traverse():
-        mut_vec = [0, 0, 0, 0]
-        if node.up is None:  # node is root
-            pass
-        else:  # non-root node
+    for i in range(len(tree.sequence)):
+        for node in tree.traverse():
+            mut_vec = [0, 0, 0, 0]
+            if node.up is None:  # node is root
+                pass
+            else:  # non-root node
+                n_seq = node.sequence[i]
+                p_seq = node.up.sequence[i]
+                # except AttributeError:
+                #     n_seq = node.name
+                #     p_seq = node.up.name
+                try:
+                    mut_vec[STATE_TO_IDX[n_seq]] += 1
+                    mut_vec[STATE_TO_IDX[p_seq]] -= 1
+                except KeyError:
+                    raise ValueError(f"Each node sequence must be in {STATES}")
+            new_row = torch.tensor(mut_vec).unsqueeze(0)
             try:
-                n_seq = node.sequence
-                p_seq = node.up.sequence
+                node.to_parent["feature_0"] = torch.cat(
+                    (node.to_parent["feature_0"], new_row)
+                )
             except AttributeError:
-                n_seq = node.name
-                p_seq = node.up.name
-            try:
-                mut_vec[STATE_TO_IDX[n_seq]] += 1
-                mut_vec[STATE_TO_IDX[p_seq]] -= 1
-            except KeyError:
-                raise ValueError(f"Each node sequence must be in {STATES}")
-        try:
-            node.to_parent["feature_0"] = torch.tensor(mut_vec)
-        except AttributeError:
-            node.add_feature("to_parent", {"feature_0": torch.tensor(mut_vec)})
+                node.add_feature("to_parent", {"feature_0": new_row})
     return None
 
 
@@ -145,3 +148,13 @@ def is_perfect(tree):
     n_mutations = mutation_count(tree)
     n_leaf_states = leaf_state_count(tree)
     return n_leaf_states == n_mutations + 1
+
+def collate_sequences(tree1, tree2):
+    """returns a tree with sequences obtained from concatenating sequences from tree1
+    and tree2"""
+    seq_list_1 = [n.sequence for n in tree1.traverse()]
+    seq_list_2 = [n.sequence for n in tree2.traverse()]
+    tree = tree1.copy()
+    for i, n in enumerate(tree.traverse()):
+        n.sequence = seq_list_1[i] + seq_list_2[i]
+    return tree
