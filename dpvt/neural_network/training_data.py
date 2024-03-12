@@ -21,9 +21,10 @@ def assign_features(tree):
         tree (ete3 Tree): has sequence attribute on each node
     Returns: None
     """
-    for i in range(len(tree.sequence)):
-        for node in tree.traverse():
-            mut_vec = [0, 0, 0, 0]
+    n_sites = len(tree.sequence)
+    for node in tree.traverse():
+        for i in range(n_sites):
+            mut_vec = [0.0, 0.0, 0.0, 0.0]
             if node.up is None:  # node is root
                 pass
             else:  # non-root node
@@ -38,12 +39,18 @@ def assign_features(tree):
                 except KeyError:
                     raise ValueError(f"Each node sequence must be in {STATES}")
             new_row = torch.tensor(mut_vec).unsqueeze(0)
-            try:
+            if i == 0:
+                node.add_feature("to_parent", {"feature_0": new_row})
+            else:
                 node.to_parent["feature_0"] = torch.cat(
                     (node.to_parent["feature_0"], new_row)
                 )
-            except AttributeError:
-                node.add_feature("to_parent", {"feature_0": new_row})
+            # try:
+            #     node.to_parent["feature_0"] = torch.cat(
+            #         (node.to_parent["feature_0"], new_row)
+            #     )
+            # except AttributeError:
+            #     node.add_feature("to_parent", {"feature_0": new_row})
     return None
 
 
@@ -109,10 +116,19 @@ good_trees = nwk_list_to_trees(good_nwks)
 
 bad_trees = nwk_list_to_trees(bad_nwks)
 
+
+"""
+4-site trees
+"""
+
+site4_nwk = "((0000,(1111,1111)1111)0000)0000;"
+site4_nwk = pattern_to_nwk_list(site4_nwk)[0]
+site4_tree = nwk_list_to_trees([site4_nwk])[0]
+
+
 """
 convenience functions
 """
-
 
 def random_state_assignment(tree):
     """returns a new tree which has the same topology as the input tree, but with

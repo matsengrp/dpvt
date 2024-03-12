@@ -4,6 +4,12 @@ import torch.nn.functional as F
 import lightning as L
 from ete3 import Tree
 
+# transformer hyperparameters
+d_model_per_head = 2
+nhead = 2
+d_model = nhead * d_model_per_head
+dim_feedforward = 8
+layer_count = 4
 
 class TraverseNN(L.LightningModule):
     """
@@ -35,6 +41,13 @@ class TraverseNN(L.LightningModule):
         #     nn.ReLU(),
         #     nn.Linear(32, 4),
         # )
+        self.encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model,
+            nhead=nhead,
+            dim_feedforward=dim_feedforward,
+            batch_first=True, # check this
+        )
+        self.encoder = nn.TransformerEncoder(self.encoder_layer, layer_count)
         self.final = nn.Linear(4, 1)
 
         # self.loss = nn.BCEWithLogitsLoss()
@@ -87,38 +100,56 @@ class TraverseNN(L.LightningModule):
                 to_parent["feature_0"] that encodes the mutation between the node and
                 its parent, e.g. A -> G is encoded by [-1, 1, 0, 0]
         """
+        n_sites = len(tree.sequence)
         # tree = tree.copy()
         # root-ward traversal
         for node in tree.traverse(strategy="postorder"):
             if node.is_leaf():
-                node.to_parent["feature_1"] = torch.zeros(4)
-            elif len(node.children) == 1:  # node is root with signle child
+                node.to_parent["feature_1"] = torch.zeros((n_sites, 4))
+            elif len(node.children) == 1:  # node is root with single child
                 assert node.up is None
                 child = node.children[0]
                 node.to_parent["feature_1"] = child.to_parent["feature_1"]
             else:
-                try:
-                    child1, child2 = node.children
-                except ValueError:
-                    raise ValueError("Input tree must be bifurcating")
-                left_feature_0 = child1.to_parent["feature_0"]
-                left_feature_1 = child1.to_parent["feature_1"]
-                right_feature_0 = child2.to_parent["feature_0"]
-                right_feature_1 = child2.to_parent["feature_1"]
-                left_data = torch.cat((left_feature_0, left_feature_1))
-                right_data = torch.cat((right_feature_0, right_feature_1))
-                node.to_parent["feature_1"] = self.node_aggregate(left_data, right_data)
+                feature_1 = torch.zeros((n_sites, 4))
+                for i in range(n_sites):
+                    try:
+                        child1, child2 = node.children
+                    except ValueError:
+                        raise ValueError(
+                            f"Input tree must be bifurcating, but node has"
+                            "{len(node.children)} children"
+                        )
+                    left_feature_0 = child1.to_parent["feature_0"][i]
+                    left_feature_1 = child1.to_parent["feature_1"][i]
+                    right_feature_0 = child2.to_parent["feature_0"][i]
+                    right_feature_1 = child2.to_parent["feature_1"][i]
+                    # print("right_0:", right_feature_0)
+                    # print("right_1:", right_feature_1)
+                    left_data = torch.cat((left_feature_0, left_feature_1), dim=0)
+                    right_data = torch.cat((right_feature_0, right_feature_1), dim=0)
+                    feature_1[i] = self.node_aggregate(left_data, right_data)
+                node.to_parent["feature_1"] = feature_1
         # leaf-ward traversal -> skip for now
         # logits = self.up_traverse_stack(x)
         # feed root feature into final layer
-        logit = self.final(tree.to_parent["feature_1"])
+        out = self.encoder(tree.to_parent["feature_1"])
+        logit = self.final(out)
         return logit
 
     def node_aggregate(self, left_data, right_data):
         """
-        pass concatentation of feature vectors in both orders, `(left, right)` and
-        `(right, left)` and add outputs, to apply symmetry constraint
+        pass concatenation of feature vectors
+        previous version: pass concatentation of feature vectors in both orders,
+            `(left, right)` and `(right, left)` and add outputs, to apply symmetry
+            constraint
         """
+        # output = torch.cat(
+        #     [
+        #         self.up_traverse_stack(torch.cat((left_data[i], right_data[i]))) 
+        #         for i in range(left_data.size()[0])
+        #     ]
+        # )
         output = self.up_traverse_stack(torch.cat((left_data, right_data)))
         # output += self.up_traverse_stack(torch.cat((right_data, left_data)))
-        return output
+        return output.unsqueeze(dim=0)
