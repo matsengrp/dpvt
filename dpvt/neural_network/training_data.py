@@ -55,8 +55,39 @@ def assign_features(tree):
 
 
 def pattern_to_nwk_list(temp):
+    """
+    Takes a template newick string, containing 0's and 1's, and replaces these states
+    with DNA basepair states
+    """
     nwks = [temp.replace("0", a).replace("1", b) for a, b in permutations(STATES, 2)]
     return nwks
+
+def pattern_to_nwk_random(temp):
+    """
+    Takes a template newick string, containing 0's and 1's, and replaces these states
+    with a random choice of DNA basepair states
+    """
+    a, b = random.choice(list(permutations(STATES, 2)))
+    return temp.replace("0", a).replace("1", b)
+
+def nwk_to_tree(nwk):
+    tree = Tree(nwk, format=8)
+    for node in tree.traverse():
+        node.sequence = node.name
+    return tree
+
+def nwk_list_to_trees(nwks):
+    """
+    Takes a list of newick strings as input, and returns a list of corresponding trees,
+    where each tree is annotated by appropriate information for use in neural network
+    """
+    trees = [Tree(nwk, format=8) for nwk in nwks]
+    trees += [reflect_tree(tree) for tree in trees]
+    for tree in trees:
+        for node in tree.traverse():
+            node.sequence = node.name
+        assign_features(tree)
+    return trees
 
 def reflect_tree(tree):
     """returns a new tree which has the same topology as the input tree, 
@@ -99,31 +130,18 @@ bad_nwks = pattern_to_nwk_list(bad_template)
 # ]
 
 
-def nwk_list_to_trees(nwks):
-    """
-    Takes a list of newick strings as input, and returns a list of corresponding trees,
-    where each tree is annotated by appropriate information for use in neural network
-    """
-    trees = [Tree(nwk, format=8) for nwk in nwks]
-    trees += [reflect_tree(tree) for tree in trees]
-    for tree in trees:
-        for node in tree.traverse():
-            node.sequence = node.name
-        assign_features(tree)
-    return trees
-
 good_trees = nwk_list_to_trees(good_nwks)
 
 bad_trees = nwk_list_to_trees(bad_nwks)
 
-
+neutral_template = "((0,(1,0)0)0)0;"
 """
-4-site trees
+      /-0
+-0/-0|
+     |   /-1
+      \0|
+         \-0
 """
-
-site4_nwk = "((0000,(1111,1111)1111)0000)0000;"
-site4_nwk = pattern_to_nwk_list(site4_nwk)[0]
-site4_tree = nwk_list_to_trees([site4_nwk])[0]
 
 
 """
@@ -173,4 +191,38 @@ def collate_sequences(tree1, tree2):
     tree = tree1.copy()
     for i, n in enumerate(tree.traverse()):
         n.sequence = seq_list_1[i] + seq_list_2[i]
+        n.name = n.sequence
     return tree
+
+
+"""
+4-site trees
+"""
+
+site4_nwk = "((0000,(1111,1111)1111)0000)0000;"
+site4_nwk = pattern_to_nwk_list(site4_nwk)[0]
+site4_tree = nwk_list_to_trees([site4_nwk])[0]
+
+site4_good_trees = []
+for _ in range(10):
+    t1 = nwk_to_tree(pattern_to_nwk_random(good_template))
+    t2 = nwk_to_tree(pattern_to_nwk_random(good_template))
+    t3 = nwk_to_tree(pattern_to_nwk_random(bad_template))
+    t4 = nwk_to_tree(pattern_to_nwk_random(neutral_template))
+    t1, t2, t3, t4 = random.sample([t1, t2, t3, t4], 4)
+    t12 = collate_sequences(t1, t2)
+    t34 = collate_sequences(t3, t4)
+    tree = collate_sequences(t12, t34)
+    site4_good_trees.append(tree)
+
+site4_bad_trees = []
+for _ in range(10):
+    t1 = nwk_to_tree(pattern_to_nwk_random(good_template))
+    t2 = nwk_to_tree(pattern_to_nwk_random(bad_template))
+    t3 = nwk_to_tree(pattern_to_nwk_random(bad_template))
+    t4 = nwk_to_tree(pattern_to_nwk_random(neutral_template))
+    t1, t2, t3, t4 = random.sample([t1, t2, t3, t4], 4)
+    t12 = collate_sequences(t1, t2)
+    t34 = collate_sequences(t3, t4)
+    tree = collate_sequences(t12, t34)
+    site4_bad_trees.append(tree)
