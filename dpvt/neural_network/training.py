@@ -32,10 +32,11 @@ class FourLeafData(dataset.Dataset):
     def __len__(self):
         return len(self.data)
 
+SAMPLE_SIZE = 20
 class FourLeafFourSiteData(dataset.Dataset):
     def __init__(self):
         self.data = site4_good_trees + site4_bad_trees
-        self.labels = [0.0 for _ in range(10)] + [1.0 for _ in range(10)]
+        self.labels = [0.0 for _ in range(SAMPLE_SIZE)] + [1.0 for _ in range(SAMPLE_SIZE)]
 
     def __getitem__(self, index):
         return self.data[index], self.labels[index]
@@ -51,7 +52,7 @@ def custom_collate(items):
     """
     return [item[0] for item in items], torch.tensor([item[1] for item in items])
 
-train_data, test_data = random_split(FourLeafFourSiteData(), [16, 4])
+train_data, test_data = random_split(FourLeafFourSiteData(), [32, 8])
 train_loader = DataLoader(train_data, batch_size=2, collate_fn=custom_collate)
 test_loader = DataLoader(test_data, batch_size=2, collate_fn=custom_collate)
 

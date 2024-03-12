@@ -205,8 +205,9 @@ site4_nwk = "((0000,(1111,1111)1111)0000)0000;"
 site4_nwk = pattern_to_nwk_list(site4_nwk)[0]
 site4_tree = nwk_list_to_trees([site4_nwk])[0]
 
+SAMPLE_SIZE = 20
 site4_good_trees = []
-for _ in range(10):
+for _ in range(SAMPLE_SIZE):
     t1 = nwk_to_tree(pattern_to_nwk_random(good_template))
     t2 = nwk_to_tree(pattern_to_nwk_random(good_template))
     t3 = nwk_to_tree(pattern_to_nwk_random(bad_template))
@@ -219,7 +220,7 @@ for _ in range(10):
     site4_good_trees.append(tree)
 
 site4_bad_trees = []
-for _ in range(10):
+for _ in range(SAMPLE_SIZE):
     t1 = nwk_to_tree(pattern_to_nwk_random(good_template))
     t2 = nwk_to_tree(pattern_to_nwk_random(bad_template))
     t3 = nwk_to_tree(pattern_to_nwk_random(bad_template))
