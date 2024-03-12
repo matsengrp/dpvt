@@ -99,7 +99,9 @@ def reflect_tree(tree):
             node.children[0], node.children[1] = node.children[1], node.children[0]
     return reflected_tree
 
-
+"""
+1-site, 4-leaf trees
+"""
 good_template = "((0,(1,1)1)0)0;"
 """
       /-0
@@ -196,7 +198,7 @@ def collate_sequences(tree1, tree2):
 
 
 """
-4-site trees
+4-site, 4-leaf trees
 """
 
 site4_nwk = "((0000,(1111,1111)1111)0000)0000;"
@@ -213,6 +215,7 @@ for _ in range(10):
     t12 = collate_sequences(t1, t2)
     t34 = collate_sequences(t3, t4)
     tree = collate_sequences(t12, t34)
+    assign_features(tree)
     site4_good_trees.append(tree)
 
 site4_bad_trees = []
@@ -225,4 +228,5 @@ for _ in range(10):
     t12 = collate_sequences(t1, t2)
     t34 = collate_sequences(t3, t4)
     tree = collate_sequences(t12, t34)
+    assign_features(tree)
     site4_bad_trees.append(tree)

@@ -48,7 +48,8 @@ class TraverseNN(L.LightningModule):
             batch_first=True, # check this
         )
         self.encoder = nn.TransformerEncoder(self.encoder_layer, layer_count)
-        self.final = nn.Linear(4, 1)
+        self.final_on_site = nn.Linear(4, 1)
+        self.final_across_sites = nn.Linear(4, 1)
 
         # self.loss = nn.BCEWithLogitsLoss()
 
@@ -134,7 +135,10 @@ class TraverseNN(L.LightningModule):
         # logits = self.up_traverse_stack(x)
         # feed root feature into final layer
         out = self.encoder(tree.to_parent["feature_1"])
-        logit = self.final(out)
+        # print("out =", out)
+        logit = self.final_on_site(out)
+        # print("logit =", logit)
+        logit = self.final_across_sites(logit.squeeze())
         return logit
 
     def node_aggregate(self, left_data, right_data):

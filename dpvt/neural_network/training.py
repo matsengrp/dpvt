@@ -12,11 +12,13 @@ from dpvt.neural_network.traverse_nn import TraverseNN
 from dpvt.neural_network.training_data import (
     good_trees,
     bad_trees,
+    site4_good_trees,
+    site4_bad_trees,
 )
 
 
 # hyperparameters
-epochs = 100
+epochs = 200
 
 
 class FourLeafData(dataset.Dataset):
@@ -30,6 +32,16 @@ class FourLeafData(dataset.Dataset):
     def __len__(self):
         return len(self.data)
 
+class FourLeafFourSiteData(dataset.Dataset):
+    def __init__(self):
+        self.data = site4_good_trees + site4_bad_trees
+        self.labels = [0.0 for _ in range(10)] + [1.0 for _ in range(10)]
+
+    def __getitem__(self, index):
+        return self.data[index], self.labels[index]
+
+    def __len__(self):
+        return len(self.data)
 
 def custom_collate(items):
     """
@@ -39,13 +51,13 @@ def custom_collate(items):
     """
     return [item[0] for item in items], torch.tensor([item[1] for item in items])
 
-train_data, test_data = random_split(FourLeafData(), [40, 8])
+train_data, test_data = random_split(FourLeafFourSiteData(), [16, 4])
 train_loader = DataLoader(train_data, batch_size=2, collate_fn=custom_collate)
 test_loader = DataLoader(test_data, batch_size=2, collate_fn=custom_collate)
 
 # use pytorch lightning
 tnn = TraverseNN()
-logger = TensorBoardLogger("lightning_logs", name="TNN_augmented_v0")
+logger = TensorBoardLogger("lightning_logs", name="TNN_4leaf_4sites_v0")
 trainer = L.Trainer(
     logger=logger,
     max_epochs=epochs,
