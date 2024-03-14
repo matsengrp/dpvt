@@ -30,7 +30,7 @@ class TraverseNN(L.LightningModule):
     def __init__(self):
         super().__init__()
         # learning rate
-        self.lr = 0.05
+        self.lr = 0.01
         self.up_traverse_stack = nn.Sequential(
             nn.Linear(16, 32),
             nn.ReLU(),
@@ -54,7 +54,8 @@ class TraverseNN(L.LightningModule):
         # self.loss = nn.BCEWithLogitsLoss()
 
     def configure_optimizers(self):
-        optimizer = torch.optim.SGD(self.parameters(), lr=self.lr)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
+        # optimizer = torch.optim.SGD(self.parameters(), lr=self.lr)
         return optimizer
 
     def training_step(self, train_batch, batch_idx):

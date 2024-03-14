@@ -201,13 +201,16 @@ def collate_sequences(tree1, tree2):
 4-site, 4-leaf trees
 """
 
-site4_nwk = "((0000,(1111,1111)1111)0000)0000;"
-site4_nwk = pattern_to_nwk_list(site4_nwk)[0]
-site4_tree = nwk_list_to_trees([site4_nwk])[0]
+# site4_nwk = "((0000,(1111,1111)1111)0000)0000;"
+# site4_nwk = pattern_to_nwk_list(site4_nwk)[0]
+# site4_tree = nwk_list_to_trees([site4_nwk])[0]
 
-SAMPLE_SIZE = 20
+SAMPLE_SIZE = 80
+assert SAMPLE_SIZE % 2 == 0
 site4_good_trees = []
-for _ in range(SAMPLE_SIZE):
+# generate "good" trees for training by concatenating 2 "good" sites with 1 "bad" and 
+# 1 "neutral", shuffled in random site-order
+for _ in range(SAMPLE_SIZE // 2):
     t1 = nwk_to_tree(pattern_to_nwk_random(good_template))
     t2 = nwk_to_tree(pattern_to_nwk_random(good_template))
     t3 = nwk_to_tree(pattern_to_nwk_random(bad_template))
@@ -220,7 +223,9 @@ for _ in range(SAMPLE_SIZE):
     site4_good_trees.append(tree)
 
 site4_bad_trees = []
-for _ in range(SAMPLE_SIZE):
+# generate "good" trees for training by concatenating 2 "bad" sites with 1 "good" and 
+# 1 "neutral", shuffled in random site-order
+for _ in range(SAMPLE_SIZE // 2):
     t1 = nwk_to_tree(pattern_to_nwk_random(good_template))
     t2 = nwk_to_tree(pattern_to_nwk_random(bad_template))
     t3 = nwk_to_tree(pattern_to_nwk_random(bad_template))
