@@ -225,12 +225,10 @@ site4_good_trees = []
 for _ in range(SAMPLE_SIZE // 2):
     t1 = random.choice(good_trees[:12])
     t2 = random.choice(good_trees[:12])
-    # t3 = random.choice(bad_trees[:12])
-    t3 = random.choice(neutral_trees[:12])
-    t4 = random.choice(good_trees[:12])
+    t3 = random.choice(bad_trees[:12])
+    t4 = random.choice(neutral_trees[:12])
+    # t4 = random.choice(good_trees[:12])
     t1, t2, t3, t4 = random.sample([t1, t2, t3, t4], 4)
-    # t12 = collate_sequences(t1, t2)
-    # t34 = collate_sequences(t3, t4)
     tree = collate_sequences([t1, t2, t3, t4])
     assign_features(tree)
     site4_good_trees.append(tree)
@@ -239,14 +237,12 @@ site4_bad_trees = []
 # generate "good" trees for training by concatenating 2 "bad" sites with 1 "good" and 
 # 1 "neutral", shuffled in random site-order
 for _ in range(SAMPLE_SIZE // 2):
-    # t1 = random.choice(good_trees[:12])
-    t1 = random.choice(neutral_trees[:12])
-    t2 = random.choice(bad_trees[:12])
+    t1 = random.choice(good_trees[:12])
+    t2 = random.choice(neutral_trees[:12])
+    # t2 = random.choice(bad_trees[:12])
     t3 = random.choice(bad_trees[:12])
     t4 = random.choice(bad_trees[:12])
     t1, t2, t3, t4 = random.sample([t1, t2, t3, t4], 4)
-    # t12 = collate_sequences(t1, t2)
-    # t34 = collate_sequences(t3, t4)
     tree = collate_sequences([t1, t2, t3, t4])
     assign_features(tree)
     site4_bad_trees.append(tree)

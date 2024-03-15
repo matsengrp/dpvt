@@ -22,7 +22,7 @@ from dpvt.neural_network.training_data import (
 epochs = 100
 TRAIN_SIZE = int(0.8 * SAMPLE_SIZE)
 TEST_SIZE = SAMPLE_SIZE - TRAIN_SIZE
-BATCH_SIZE = 8
+BATCH_SIZE = 16
 
 class FourLeafData(dataset.Dataset):
     def __init__(self):
@@ -35,13 +35,11 @@ class FourLeafData(dataset.Dataset):
     def __len__(self):
         return len(self.data)
 
-# SAMPLE_SIZE = 20
 class FourLeafFourSiteData(dataset.Dataset):
     def __init__(self):
         self.data = site4_good_trees + site4_bad_trees
-        self.labels = (
-            [0.0 for _ in range(SAMPLE_SIZE // 2)] + [1.0 for _ in range(SAMPLE_SIZE // 2)]
-        )
+        self.labels = [0.0 for _ in range(SAMPLE_SIZE // 2)]
+        self.labels += [1.0 for _ in range(SAMPLE_SIZE // 2)]
 
     def __getitem__(self, index):
         return self.data[index], self.labels[index]
