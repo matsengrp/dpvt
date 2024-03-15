@@ -63,6 +63,12 @@ class TraverseNN(L.LightningModule):
         pred = torch.cat([self.forward_on_tree(item) for item in xb])
         loss = F.binary_cross_entropy_with_logits(pred, yb)
         self.log("train_loss", loss, batch_size=len(xb), on_epoch=True)
+        # log predictions
+        pos_predictions = F.sigmoid(pred[yb < 0.5])
+        neg_predictions = F.sigmoid(pred[yb > 0.5])
+        self.log("pos_prediction_avg", torch.mean(pos_predictions), prog_bar=True)
+        self.log("neg_prediction_avg", torch.mean(neg_predictions), prog_bar=True)
+        # self.log_dict({"label": yb[0], "prediction": F.sigmoid(pred[0])}, prog_bar=True)
         return loss
 
     def validation_step(self, val_batch, batch_idx):
