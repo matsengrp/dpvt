@@ -19,8 +19,10 @@ from dpvt.neural_network.training_data import (
 
 
 # hyperparameters
-epochs = 200
-
+epochs = 100
+TRAIN_SIZE = int(0.8 * SAMPLE_SIZE)
+TEST_SIZE = SAMPLE_SIZE - TRAIN_SIZE
+BATCH_SIZE = 8
 
 class FourLeafData(dataset.Dataset):
     def __init__(self):
@@ -55,14 +57,12 @@ def custom_collate(items):
     """
     return [item[0] for item in items], torch.tensor([item[1] for item in items])
 
-TRAIN_SIZE = int(0.8 * SAMPLE_SIZE)
-TEST_SIZE = SAMPLE_SIZE - TRAIN_SIZE
 print("sample size:", SAMPLE_SIZE)
 print("train size:", TRAIN_SIZE)
 print("test size:", TEST_SIZE)
 train_data, test_data = random_split(FourLeafFourSiteData(), [TRAIN_SIZE, TEST_SIZE])
-train_loader = DataLoader(train_data, batch_size=2, collate_fn=custom_collate)
-test_loader = DataLoader(test_data, batch_size=2, collate_fn=custom_collate)
+train_loader = DataLoader(train_data, batch_size=BATCH_SIZE, collate_fn=custom_collate)
+test_loader = DataLoader(test_data, batch_size=BATCH_SIZE, collate_fn=custom_collate)
 
 # use pytorch lightning
 tnn = TraverseNN()
