@@ -1,24 +1,22 @@
+import sys
+import os
+from pathlib import Path
 import torch
 from torch.utils.data import (
     random_split,
     dataset,
-    DataLoader,
 )
-import lightning as L
-from pytorch_lightning.loggers import TensorBoardLogger
-import matplotlib.pyplot as plt
 
-from dpvt.neural_network.traverse_nn import TraverseNN
-from dpvt.generate_data.training_data import (
+sys.path.append("..")
+
+from generate_data.training_data import (
     good_trees,
     bad_trees,
     site4_good_trees,
     site4_bad_trees,
 )
 
-
-# hyperparameters
-epochs = 200
+import pickle
 
 
 class FourLeafData(dataset.Dataset):
@@ -32,6 +30,7 @@ class FourLeafData(dataset.Dataset):
     def __len__(self):
         return len(self.data)
 
+
 class FourLeafFourSiteData(dataset.Dataset):
     def __init__(self):
         self.data = site4_good_trees + site4_bad_trees
@@ -43,6 +42,7 @@ class FourLeafFourSiteData(dataset.Dataset):
     def __len__(self):
         return len(self.data)
 
+
 def custom_collate(items):
     """
     Args:
@@ -51,23 +51,24 @@ def custom_collate(items):
     """
     return [item[0] for item in items], torch.tensor([item[1] for item in items])
 
-train_data, test_data = random_split(FourLeafFourSiteData(), [16, 4])
-train_loader = DataLoader(train_data, batch_size=2, collate_fn=custom_collate)
-test_loader = DataLoader(test_data, batch_size=2, collate_fn=custom_collate)
 
-# use pytorch lightning
-tnn = TraverseNN()
-logger = TensorBoardLogger("lightning_logs", name="TNN_4leaf_4sites_v0")
-trainer = L.Trainer(
-    logger=logger,
-    max_epochs=epochs,
-    log_every_n_steps=1,
-)
+def create_training_data(file_path):
+    train_data, test_data = random_split(FourLeafFourSiteData(), [16, 4])
+    data_dict = {
+        "train": train_data,
+        "val": test_data
+    }
+    with open(file_path, "wb") as f:
+        pickle.dump(data_dict, file = f)
 
 
-def run():
-    trainer.fit(tnn, train_loader, test_loader)
+def main():
+    data_dir = Path(__file__).parent / "../data"
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+    file_path = data_dir / "4leaf4site.p"
+    create_training_data(file_path)
 
 
 if __name__ == "__main__":
-    run()
+    main()

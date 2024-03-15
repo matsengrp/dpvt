@@ -11,6 +11,7 @@ d_model = nhead * d_model_per_head
 dim_feedforward = 8
 layer_count = 4
 
+
 class TraverseNN(L.LightningModule):
     """
     A pytorch module which takes a list of ete3.Trees as input and outputs 0's and 1's
@@ -20,7 +21,7 @@ class TraverseNN(L.LightningModule):
     The forward function applies two traversals to the input tree, first root-ward and
     then leaf-ward.
 
-    For now, we only implement the root-ward traverseal.
+    For now, we only implement the root-ward traversal.
 
     Attributes:
         up_traverse_stack

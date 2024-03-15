@@ -1,0 +1,27 @@
+import sys
+
+sys.path.append("..")
+
+from dpvtex.dpvt_zoo import train_model, trained_model_path
+
+configfile: "config.yaml"
+model_names = config["models"]
+data_names = config["data"]
+
+
+def trained_model_ckpt(model_name, data_name):
+    return f"{trained_model_path(model_name, data_name)}.ckpt"
+
+
+rule all:
+    input:
+        expand(trained_model_ckpt("{model_name}", "{data_name}"),
+            model_name=model_names,
+            data_name=data_names)
+
+
+rule train_model:
+    output:
+        trained_model=trained_model_ckpt("{model_name}", "{data_name}")
+    run:
+        train_model(wildcards.model_name, wildcards.data_name, output.trained_model)
