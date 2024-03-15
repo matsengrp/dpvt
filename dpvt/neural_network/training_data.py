@@ -144,6 +144,7 @@ neutral_template = "((0,(1,0)0)0)0;"
       \0|
          \-0
 """
+neutral_trees = nwk_list_to_trees(pattern_to_nwk_list(neutral_template))
 
 
 """
@@ -185,14 +186,25 @@ def is_perfect(tree):
     n_leaf_states = leaf_state_count(tree)
     return n_leaf_states == n_mutations + 1
 
-def collate_sequences(tree1, tree2):
-    """returns a tree with sequences obtained from concatenating sequences from tree1
-    and tree2"""
-    seq_list_1 = [n.sequence for n in tree1.traverse()]
-    seq_list_2 = [n.sequence for n in tree2.traverse()]
-    tree = tree1.copy()
+def collate_sequences(trees):
+    """returns a tree with sequences obtained from concatenating sequences from  the 
+    input trees. Assumes all input trees have same topology
+    Args:
+        trees (list of ete3 Trees)
+    """
+    # check that all input trees have same topology
+    topology_nwk = trees[0].write(format=100)
+    for tree in trees[1:]:
+        assert topology_nwk == tree.write(format=100), (
+            "trees have different topology, collation failed"
+        )
+    # end check
+    seq_lists = [
+        [n.sequence for n in tree.traverse()] for tree in trees
+    ]
+    tree = trees[0].copy()
     for i, n in enumerate(tree.traverse()):
-        n.sequence = seq_list_1[i] + seq_list_2[i]
+        n.sequence = "".join([seq_list[i] for seq_list in seq_lists])
         n.name = n.sequence
     return tree
 
@@ -205,20 +217,21 @@ def collate_sequences(tree1, tree2):
 # site4_nwk = pattern_to_nwk_list(site4_nwk)[0]
 # site4_tree = nwk_list_to_trees([site4_nwk])[0]
 
-SAMPLE_SIZE = 80
+SAMPLE_SIZE = 240
 assert SAMPLE_SIZE % 2 == 0
 site4_good_trees = []
 # generate "good" trees for training by concatenating 2 "good" sites with 1 "bad" and 
 # 1 "neutral", shuffled in random site-order
 for _ in range(SAMPLE_SIZE // 2):
-    t1 = nwk_to_tree(pattern_to_nwk_random(good_template))
-    t2 = nwk_to_tree(pattern_to_nwk_random(good_template))
-    t3 = nwk_to_tree(pattern_to_nwk_random(bad_template))
-    t4 = nwk_to_tree(pattern_to_nwk_random(neutral_template))
+    t1 = random.choice(good_trees[:12])
+    t2 = random.choice(good_trees[:12])
+    # t3 = random.choice(bad_trees[:12])
+    t3 = random.choice(neutral_trees[:12])
+    t4 = random.choice(good_trees[:12])
     t1, t2, t3, t4 = random.sample([t1, t2, t3, t4], 4)
-    t12 = collate_sequences(t1, t2)
-    t34 = collate_sequences(t3, t4)
-    tree = collate_sequences(t12, t34)
+    # t12 = collate_sequences(t1, t2)
+    # t34 = collate_sequences(t3, t4)
+    tree = collate_sequences([t1, t2, t3, t4])
     assign_features(tree)
     site4_good_trees.append(tree)
 
@@ -226,13 +239,14 @@ site4_bad_trees = []
 # generate "good" trees for training by concatenating 2 "bad" sites with 1 "good" and 
 # 1 "neutral", shuffled in random site-order
 for _ in range(SAMPLE_SIZE // 2):
-    t1 = nwk_to_tree(pattern_to_nwk_random(good_template))
-    t2 = nwk_to_tree(pattern_to_nwk_random(bad_template))
-    t3 = nwk_to_tree(pattern_to_nwk_random(bad_template))
-    t4 = nwk_to_tree(pattern_to_nwk_random(neutral_template))
+    # t1 = random.choice(good_trees[:12])
+    t1 = random.choice(neutral_trees[:12])
+    t2 = random.choice(bad_trees[:12])
+    t3 = random.choice(bad_trees[:12])
+    t4 = random.choice(bad_trees[:12])
     t1, t2, t3, t4 = random.sample([t1, t2, t3, t4], 4)
-    t12 = collate_sequences(t1, t2)
-    t34 = collate_sequences(t3, t4)
-    tree = collate_sequences(t12, t34)
+    # t12 = collate_sequences(t1, t2)
+    # t34 = collate_sequences(t3, t4)
+    tree = collate_sequences([t1, t2, t3, t4])
     assign_features(tree)
     site4_bad_trees.append(tree)
