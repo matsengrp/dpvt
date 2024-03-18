@@ -4,7 +4,10 @@ sys.path.append("..")
 
 from dpvtex.dpvt_zoo import train_model, trained_model_path
 
-configfile: "config.yaml"
+snakefile_dir = workflow.basedir
+config_path = os.path.join(snakefile_dir, "config.yaml")
+configfile: config_path
+
 model_names = config["models"]
 data_names = config["data"]
 
