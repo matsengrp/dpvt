@@ -1,8 +1,5 @@
 import lightning as L
 import torch
-import sys
-
-sys.path.append("..")
 
 from neural_network import models
 from neural_network.wrappers import Wrap

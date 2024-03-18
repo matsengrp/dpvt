@@ -1,15 +1,33 @@
 import pickle
+from torch.utils.data import (
+    Dataset,
+)
+from pathlib import Path
 
-from generate_data.generate_train_test_sets import FourLeafFourSiteData
+# Get the absolute path to the directory where the current script is located
+script_directory = Path(__file__).resolve().parent
 
 dataset_dict = {
-    "FourLeafFourSite": "../data/4leaf4site.p"
+    "FourLeafFourSite": script_directory.parent / "data/4leaf4site.p"
 }
+
+
+class TreeDataset(Dataset):
+    def __init__(self, data_dict):
+        self.data = list(data_dict.items())
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        item, label = self.data[idx]
+        return item, label
+
 
 def train_val_data_of_nicknames(data_name):
     file_path = dataset_dict[data_name]
     with open(file_path, "rb") as f:
         data = pickle.load(f)
-    train_data = data["train"]
-    val_data = data["val"]
+    train_data = TreeDataset(data["train"])
+    val_data = TreeDataset(data["val"])
     return train_data, val_data

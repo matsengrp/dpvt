@@ -1,11 +1,10 @@
 import torch
-from torch.utils.data import (
-    DataLoader,
-)
+from torch.utils.data import DataLoader
 import lightning as L
 from pytorch_lightning.loggers import TensorBoardLogger
 
 epochs=200
+
 
 def custom_collate(items):
     """

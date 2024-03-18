@@ -1,11 +1,7 @@
-import sys
 import os
+import sys
 from pathlib import Path
 import torch
-from torch.utils.data import (
-    random_split,
-    dataset,
-)
 
 sys.path.append("..")
 
@@ -19,30 +15,6 @@ from generate_data.training_data import (
 import pickle
 
 
-class FourLeafData(dataset.Dataset):
-    def __init__(self):
-        self.data = good_trees + bad_trees
-        self.labels = [0.0 for _ in range(24)] + [1.0 for _ in range(24)]
-
-    def __getitem__(self, index):
-        return self.data[index], self.labels[index]
-
-    def __len__(self):
-        return len(self.data)
-
-
-class FourLeafFourSiteData(dataset.Dataset):
-    def __init__(self):
-        self.data = site4_good_trees + site4_bad_trees
-        self.labels = [0.0 for _ in range(10)] + [1.0 for _ in range(10)]
-
-    def __getitem__(self, index):
-        return self.data[index], self.labels[index]
-
-    def __len__(self):
-        return len(self.data)
-
-
 def custom_collate(items):
     """
     Args:
@@ -53,10 +25,25 @@ def custom_collate(items):
 
 
 def create_training_data(file_path):
-    train_data, test_data = random_split(FourLeafFourSiteData(), [16, 4])
+
+    tree_dict = {**{tree: 0.0 for tree in site4_good_trees}, **{tree: 1.0 for tree in site4_bad_trees}}
+    # Calculate the number of items for training and validation
+    num_items = len(tree_dict)
+    num_train = int(num_items * 0.8)
+
+    # Shuffle the keys and split them
+    keys = list(tree_dict.keys())
+    random_idx = torch.randperm(num_items)
+    train_keys = [keys[i] for i in random_idx[:num_train]]
+    val_keys = [keys[i] for i in random_idx[num_train:]]
+
+    # Create subsets based on the split keys
+    train_data = {key: tree_dict[key] for key in train_keys}
+    val_data = {key: tree_dict[key] for key in val_keys}
+
     data_dict = {
         "train": train_data,
-        "val": test_data
+        "val": val_data
     }
     with open(file_path, "wb") as f:
         pickle.dump(data_dict, file = f)
