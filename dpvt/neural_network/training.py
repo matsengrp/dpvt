@@ -5,7 +5,8 @@ from torch.utils.data import (
     DataLoader,
 )
 import lightning as L
-from pytorch_lightning.loggers import TensorBoardLogger
+from lightning.pytorch.loggers import TensorBoardLogger
+from lightning.pytorch.callbacks import ModelCheckpoint
 import matplotlib.pyplot as plt
 
 from dpvt.neural_network.traverse_nn import TraverseNN
@@ -64,11 +65,17 @@ test_loader = DataLoader(test_data, batch_size=BATCH_SIZE, collate_fn=custom_col
 
 # use pytorch lightning
 tnn = TraverseNN()
-logger = TensorBoardLogger("lightning_logs", name="TNN_4leaf_4sites_v0")
+logger = TensorBoardLogger(save_dir="lightning_logs", name="TNN_4leaf_4sites_v0")
+checkpoint_callback = ModelCheckpoint(
+    every_n_epochs=10, 
+    save_top_k=-1
+)
 trainer = L.Trainer(
     logger=logger,
     max_epochs=epochs,
     log_every_n_steps=1,
+    callbacks=[checkpoint_callback],
+    # default_root_dir="lightning_logs/"
 )
 
 
