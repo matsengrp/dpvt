@@ -49,3 +49,10 @@ Negative values means the edge is in a maximum parsimony tree, while positive va
 [Current implementation does not do steps 3 and 4, for simplicity]
 
 
+## Logging training
+
+To train the model, run `python dpvt/neural_network/training.py`
+
+To view training logs, run `tensorboard --logdir .` and direct your browser to `http://localhost:6006/`
+
+
