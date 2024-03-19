@@ -62,6 +62,7 @@ def pattern_to_nwk_list(temp):
     nwks = [temp.replace("0", a).replace("1", b) for a, b in permutations(STATES, 2)]
     return nwks
 
+
 def pattern_to_nwk_random(temp):
     """
     Takes a template newick string, containing 0's and 1's, and replaces these states
@@ -70,11 +71,13 @@ def pattern_to_nwk_random(temp):
     a, b = random.choice(list(permutations(STATES, 2)))
     return temp.replace("0", a).replace("1", b)
 
+
 def nwk_to_tree(nwk):
     tree = Tree(nwk, format=8)
     for node in tree.traverse():
         node.sequence = node.name
     return tree
+
 
 def nwk_list_to_trees(nwks):
     """
@@ -89,8 +92,9 @@ def nwk_list_to_trees(nwks):
         assign_features(tree)
     return trees
 
+
 def reflect_tree(tree):
-    """returns a new tree which has the same topology as the input tree, 
+    """returns a new tree which has the same topology as the input tree,
     but reflected by swapping the branches at each bifurcating internal node.
     """
     reflected_tree = tree.copy()
@@ -98,6 +102,7 @@ def reflect_tree(tree):
         if len(node.get_children()) == 2:
             node.children[0], node.children[1] = node.children[1], node.children[0]
     return reflected_tree
+
 
 """
 1-site, 4-leaf trees
@@ -151,6 +156,7 @@ neutral_trees = nwk_list_to_trees(pattern_to_nwk_list(neutral_template))
 convenience functions
 """
 
+
 def random_state_assignment(tree):
     """returns a new tree which has the same topology as the input tree, but with
     random node sequences and names"""
@@ -186,8 +192,9 @@ def is_perfect(tree):
     n_leaf_states = leaf_state_count(tree)
     return n_leaf_states == n_mutations + 1
 
+
 def collate_sequences(trees):
-    """returns a tree with sequences obtained from concatenating sequences from  the 
+    """returns a tree with sequences obtained from concatenating sequences from  the
     input trees. Assumes all input trees have same topology
     Args:
         trees (list of ete3 Trees)
@@ -195,13 +202,11 @@ def collate_sequences(trees):
     # check that all input trees have same topology
     topology_nwk = trees[0].write(format=100)
     for tree in trees[1:]:
-        assert topology_nwk == tree.write(format=100), (
-            "trees have different topology, collation failed"
-        )
+        assert topology_nwk == tree.write(
+            format=100
+        ), "trees have different topology, collation failed"
     # end check
-    seq_lists = [
-        [n.sequence for n in tree.traverse()] for tree in trees
-    ]
+    seq_lists = [[n.sequence for n in tree.traverse()] for tree in trees]
     tree = trees[0].copy()
     for i, n in enumerate(tree.traverse()):
         n.sequence = "".join([seq_list[i] for seq_list in seq_lists])
@@ -220,7 +225,7 @@ def collate_sequences(trees):
 SAMPLE_SIZE = 240
 assert SAMPLE_SIZE % 2 == 0
 site4_good_trees = []
-# generate "good" trees for training by concatenating 2 "good" sites with 1 "bad" and 
+# generate "good" trees for training by concatenating 2 "good" sites with 1 "bad" and
 # 1 "neutral", shuffled in random site-order
 for _ in range(SAMPLE_SIZE // 2):
     t1 = random.choice(good_trees[:12])
@@ -234,7 +239,7 @@ for _ in range(SAMPLE_SIZE // 2):
     site4_good_trees.append(tree)
 
 site4_bad_trees = []
-# generate "good" trees for training by concatenating 2 "bad" sites with 1 "good" and 
+# generate "good" trees for training by concatenating 2 "bad" sites with 1 "good" and
 # 1 "neutral", shuffled in random site-order
 for _ in range(SAMPLE_SIZE // 2):
     t1 = random.choice(good_trees[:12])
