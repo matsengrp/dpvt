@@ -1,10 +1,10 @@
 import sys
 
-sys.path.append("..")
+snakefile_dir = workflow.basedir
+sys.path.append(snakefile_dir + "/..")
 
 from dpvtex.dpvt_zoo import train_model, trained_model_path
 
-snakefile_dir = workflow.basedir
 config_path = os.path.join(snakefile_dir, "config.yaml")
 configfile: config_path
 
