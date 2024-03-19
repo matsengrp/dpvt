@@ -4,12 +4,13 @@ import torch.nn.functional as F
 import lightning as L
 from ete3 import Tree
 
-# transformer hyperparameters
+# transformer parameters
 d_model_per_head = 2
 nhead = 2
 d_model = nhead * d_model_per_head
 dim_feedforward = 8
 layer_count = 4
+learning_rate = 0.01
 
 
 class TraverseNN(L.LightningModule):
@@ -28,10 +29,10 @@ class TraverseNN(L.LightningModule):
         final
     """
 
-    def __init__(self):
+    def __init__(self, learning_rate):
         super().__init__()
         # learning rate
-        self.lr = 0.01
+        self.lr = learning_rate
         self.up_traverse_stack = nn.Sequential(
             nn.Linear(16, 32),
             nn.ReLU(),

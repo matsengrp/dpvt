@@ -2,15 +2,13 @@ import lightning as L
 import torch
 
 from neural_network import models
-from neural_network.wrappers import Wrap
+from neural_network.wrapper import Wrap
 from dpvtex.dpvt_data import train_val_data_of_nicknames
-
-epochs=200
 
 
 def create_model(model_name):
     if model_name == "traverseNN":
-        model = models.TraverseNN()
+        model = models.TraverseNN(learning_rate=0.01)
     return model
 
 
@@ -31,9 +29,12 @@ def custom_collate(items):
     return [item[0] for item in items], torch.tensor([item[1] for item in items])
 
 
-def train_model(model_name, data_name, final_checkpoint):
+def train_model(model_name, data_name, final_checkpoint, **wrap_kwargs):
+    default_params = {"batch_size": 16, "epochs": 100, "learning_rate": 0.01}
+    # Update default parameters with any provided keyword arguments
+    wrap_params = {**default_params, **wrap_kwargs}
     train_data, val_data = train_val_data_of_nicknames(data_name)
     model = create_model(model_name)
-    wrap = Wrap(train_data, val_data, model, "lightning_logs")
-    wrap.train(epochs, final_checkpoint)
+    wrap = Wrap(train_data, val_data, model, "lightning_logs", **wrap_params)
+    wrap.train(final_checkpoint)
     return model

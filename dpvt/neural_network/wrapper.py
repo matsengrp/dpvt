@@ -3,8 +3,6 @@ from torch.utils.data import DataLoader
 import lightning as L
 from pytorch_lightning.loggers import TensorBoardLogger
 
-epochs=200
-
 
 def custom_collate(items):
     """
@@ -27,18 +25,23 @@ class Wrap():
         model,
         log_path,
         batch_size=1024,
+        learning_rate=0.01,
+        epochs=200,
     ):
         self.train_loader = DataLoader(train_data, batch_size=batch_size, collate_fn=custom_collate)
         self.val_loader = DataLoader(val_data, batch_size=batch_size, collate_fn=custom_collate)
         self.model = model # currently TraverseNN
         self.log_path = log_path
+        self.batch_size = batch_size
+        self.learning_rate = learning_rate
+        self.epochs = epochs
 
-    def train(self, epochs, final_checkpoint):
+    def train(self, final_checkpoint):
         # use pytorch lightning
         logger = TensorBoardLogger("lightning_logs", name=self.log_path)
         trainer = L.Trainer(
             logger=logger,
-            max_epochs=epochs,
+            max_epochs=self.epochs,
             log_every_n_steps=1,
         )
         trainer.fit(self.model, self.train_loader, self.val_loader)
