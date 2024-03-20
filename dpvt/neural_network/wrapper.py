@@ -2,6 +2,7 @@ import torch
 from torch.utils.data import DataLoader
 import lightning as L
 from pytorch_lightning.loggers import TensorBoardLogger
+from lightning.pytorch.callbacks import ModelCheckpoint
 
 
 def custom_collate(items):
@@ -33,10 +34,12 @@ class Wrap():
     def train(self, final_checkpoint):
         # use pytorch lightning
         logger = TensorBoardLogger("lightning_logs", name=self.log_path)
+        checkpoint_callback = ModelCheckpoint(every_n_epochs=10, save_top_k=-1)
         trainer = L.Trainer(
             logger=logger,
             max_epochs=self.epochs,
             log_every_n_steps=1,
+            callbacks=[checkpoint_callback]
         )
         trainer.fit(self.model, self.train_loader, self.val_loader)
         trainer.save_checkpoint(final_checkpoint)

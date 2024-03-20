@@ -13,6 +13,7 @@ layer_count = 4
 learning_rate = 0.01
 
 
+
 class TraverseNN(L.LightningModule):
     """
     A pytorch module which takes a list of ete3.Trees as input and outputs 0's and 1's
@@ -47,7 +48,7 @@ class TraverseNN(L.LightningModule):
             d_model=d_model,
             nhead=nhead,
             dim_feedforward=dim_feedforward,
-            batch_first=True, # check this
+            batch_first=True,  # check this
         )
         self.encoder = nn.TransformerEncoder(self.encoder_layer, layer_count)
         self.final_on_site = nn.Linear(4, 1)
@@ -65,7 +66,7 @@ class TraverseNN(L.LightningModule):
         pred = torch.cat([self.forward_on_tree(item) for item in xb])
         loss = F.binary_cross_entropy_with_logits(pred, yb)
         self.log("train_loss", loss, batch_size=len(xb), on_epoch=True)
-        # log predictions
+        # log predictions on positive- and negative-datapoints
         pos_predictions = F.sigmoid(pred[yb < 0.5])
         neg_predictions = F.sigmoid(pred[yb > 0.5])
         self.log("pos_prediction_avg", torch.mean(pos_predictions), prog_bar=True)
@@ -161,7 +162,7 @@ class TraverseNN(L.LightningModule):
         """
         # output = torch.cat(
         #     [
-        #         self.up_traverse_stack(torch.cat((left_data[i], right_data[i]))) 
+        #         self.up_traverse_stack(torch.cat((left_data[i], right_data[i])))
         #         for i in range(left_data.size()[0])
         #     ]
         # )
