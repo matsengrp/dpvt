@@ -13,10 +13,6 @@ def custom_collate(items):
     return [item[0] for item in items], torch.tensor([item[1] for item in items])
 
 
-def log_path(model_name, data_name):
-    return f"{model_name}-{data_name}"
-
-
 class Wrap():
     def __init__(
         self,

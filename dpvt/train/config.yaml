@@ -1,2 +1,2 @@
 models: ["traverseNN"]
-data: ["FourLeafFourSite"]
+data: ["FourLeafFourSite", "FourLeaf"]

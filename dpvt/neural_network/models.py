@@ -145,8 +145,10 @@ class TraverseNN(L.LightningModule):
         # feed root feature into final layer
         out = self.encoder(tree.to_parent["feature_1"])
         # print("out =", out)
-        logit = self.final_on_site(out)
         # print("logit =", logit)
+        logit = out
+        if n_sites > 1:
+            logit = self.final_on_site(logit)
         logit = self.final_across_sites(logit.squeeze())
         return logit
 

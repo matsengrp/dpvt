@@ -24,9 +24,9 @@ def custom_collate(items):
     return [item[0] for item in items], torch.tensor([item[1] for item in items])
 
 
-def create_training_data(file_path):
+def create_training_data(file_path, good_trees, bad_trees):
 
-    tree_dict = {**{tree: 0.0 for tree in site4_good_trees}, **{tree: 1.0 for tree in site4_bad_trees}}
+    tree_dict = {**{tree: 0.0 for tree in good_trees}, **{tree: 1.0 for tree in bad_trees}}
     # Calculate the number of items for training and validation
     num_items = len(tree_dict)
     num_train = int(num_items * 0.8)
@@ -53,8 +53,11 @@ def main():
     data_dir = Path(__file__).parent / "../data"
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
-    file_path = data_dir / "4leaf4site.p"
-    create_training_data(file_path)
+    four_site_file_path = data_dir / "4leaf4site.p"
+    create_training_data(four_site_file_path, site4_good_trees, site4_bad_trees)
+
+    one_site_file_path = data_dir / "4leaf.p"
+    create_training_data(one_site_file_path, good_trees, bad_trees)
 
 
 if __name__ == "__main__":

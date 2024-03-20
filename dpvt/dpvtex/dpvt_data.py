@@ -8,7 +8,8 @@ from pathlib import Path
 script_directory = Path(__file__).resolve().parent
 
 dataset_dict = {
-    "FourLeafFourSite": script_directory.parent / "data/4leaf4site.p"
+    "FourLeafFourSite": script_directory.parent / "data/4leaf4site.p",
+    "FourLeaf": script_directory.parent / "data/4leaf.p"
 }
 
 
