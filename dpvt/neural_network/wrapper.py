@@ -21,7 +21,6 @@ class Wrap():
         model,
         log_path,
         batch_size=1024,
-        learning_rate=0.01,
         epochs=200,
     ):
         self.train_loader = DataLoader(train_data, batch_size=batch_size, collate_fn=custom_collate)
@@ -29,7 +28,6 @@ class Wrap():
         self.model = model # currently TraverseNN
         self.log_path = log_path
         self.batch_size = batch_size
-        self.learning_rate = learning_rate
         self.epochs = epochs
 
     def train(self, final_checkpoint):

@@ -6,9 +6,9 @@ from neural_network.wrapper import Wrap
 from dpvtex.dpvt_data import train_val_data_of_nicknames
 
 
-def create_model(model_name):
+def create_model(model_name, learning_rate):
     if model_name == "traverseNN":
-        model = models.TraverseNN(learning_rate=0.01)
+        model = models.TraverseNN(learning_rate)
     return model
 
 
@@ -30,11 +30,15 @@ def custom_collate(items):
 
 
 def train_model(model_name, data_name, final_checkpoint, **wrap_kwargs):
-    default_params = {"batch_size": 16, "epochs": 100, "learning_rate": 0.01}
+    # hyperparameter
+    learning_rate = 0.01
+    # model parameters
+    default_params = {"batch_size": 16, "epochs": 100}
     # Update default parameters with any provided keyword arguments
     wrap_params = {**default_params, **wrap_kwargs}
     train_data, val_data = train_val_data_of_nicknames(data_name)
-    model = create_model(model_name)
-    wrap = Wrap(train_data, val_data, model, "lightning_logs", **wrap_params)
+    model = create_model(model_name, learning_rate)
+    model_str = trained_model_str(model_name, data_name)
+    wrap = Wrap(train_data, val_data, model, model_str, **wrap_params)
     wrap.train(final_checkpoint)
     return model
