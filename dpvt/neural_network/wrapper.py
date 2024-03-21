@@ -14,7 +14,7 @@ def custom_collate(items):
     return [item[0] for item in items], torch.tensor([item[1] for item in items])
 
 
-class Wrap():
+class Wrap:
     def __init__(
         self,
         train_data,
@@ -24,9 +24,13 @@ class Wrap():
         batch_size=1024,
         epochs=200,
     ):
-        self.train_loader = DataLoader(train_data, batch_size=batch_size, collate_fn=custom_collate)
-        self.val_loader = DataLoader(val_data, batch_size=batch_size, collate_fn=custom_collate)
-        self.model = model # currently TraverseNN
+        self.train_loader = DataLoader(
+            train_data, batch_size=batch_size, collate_fn=custom_collate
+        )
+        self.val_loader = DataLoader(
+            val_data, batch_size=batch_size, collate_fn=custom_collate
+        )
+        self.model = model  # currently TraverseNN
         self.log_path = log_path
         self.batch_size = batch_size
         self.epochs = epochs
@@ -39,7 +43,7 @@ class Wrap():
             logger=logger,
             max_epochs=self.epochs,
             log_every_n_steps=1,
-            callbacks=[checkpoint_callback]
+            callbacks=[checkpoint_callback],
         )
         trainer.fit(self.model, self.train_loader, self.val_loader)
         trainer.save_checkpoint(final_checkpoint)

@@ -13,7 +13,6 @@ layer_count = 4
 learning_rate = 0.01
 
 
-
 class TraverseNN(L.LightningModule):
     """
     A pytorch module which takes a list of ete3.Trees as input and outputs 0's and 1's

@@ -2,6 +2,7 @@ import os
 import sys
 from pathlib import Path
 import torch
+import pickle
 
 sys.path.append("..")
 
@@ -12,21 +13,13 @@ from generate_data.training_data import (
     site4_bad_trees,
 )
 
-import pickle
-
-
-def custom_collate(items):
-    """
-    Args:
-        items is a list of (input, output) pairs, where `input` is an ete3.Tree and
-        `output` is a float
-    """
-    return [item[0] for item in items], torch.tensor([item[1] for item in items])
-
 
 def create_training_data(file_path, good_trees, bad_trees):
 
-    tree_dict = {**{tree: 0.0 for tree in good_trees}, **{tree: 1.0 for tree in bad_trees}}
+    tree_dict = {
+        **{tree: 0.0 for tree in good_trees},
+        **{tree: 1.0 for tree in bad_trees},
+    }
     # Calculate the number of items for training and validation
     num_items = len(tree_dict)
     num_train = int(num_items * 0.8)
@@ -41,12 +34,9 @@ def create_training_data(file_path, good_trees, bad_trees):
     train_data = {key: tree_dict[key] for key in train_keys}
     val_data = {key: tree_dict[key] for key in val_keys}
 
-    data_dict = {
-        "train": train_data,
-        "val": val_data
-    }
+    data_dict = {"train": train_data, "val": val_data}
     with open(file_path, "wb") as f:
-        pickle.dump(data_dict, file = f)
+        pickle.dump(data_dict, file=f)
 
 
 def main():
