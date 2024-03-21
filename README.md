@@ -13,6 +13,13 @@ pip install torch_scatter torch_sparse torch_cluster torch_spline_conv -f https:
 ```
 
 
+## Training Workflow
+
+We have a workflow implemented in Snakemake (`Snakefile`), which takes as input in `config.yaml` names of models (see *Neural Network Model*) and datasets (see *Training Data*) and trains and evaluates the given models on all given datasets.
+
+To execute the workflow `snakemake -c[num_cores]`, where `[num_cores]` should be replaced with the number of cores you want to use.
+
+
 ## Training Data
 
 ### Generating Perfect Phylogenies (not yet tested for correctness or completeness)
@@ -31,7 +38,7 @@ Be careful, there are many perfect phylogenies even for a very small topology.
 
 ## Neural network model
 
-We define a Pytorch module `TraverseNN` which evaluates whether edges in a given labeled tree appear in a maximum parsiomy tree, for the given sequences on the leaf nodes.
+We define a Pytorch module `TraverseNN` which evaluates whether edges in a given labeled tree appear in a maximum parsimony tree, for the given sequences on the leaf nodes.
 This module is defined in `dpvt/traverse_nn.py`.
 
 The module works as follows:
@@ -56,3 +63,9 @@ To train the model, run `python dpvt/neural_network/training.py`
 To view training logs, run `tensorboard --logdir .` and direct your browser to `http://localhost:6006/`
 
 
+## File structure of this repo
+
+- `train`: contains `Snakefile` and `config.yaml`, in which models and datasets for training are specified.
+- `neural_network`: contains `models.py`, in which models are defined, and `wrapper.py`, containing wrappers for these models.
+- `dpvtex`: contains `dpvt_data.py`, which implements functions to get datasets for a given nickname and `dpvt_zoo.py`, which creates models for a given nickname. These nicknames are provided to the `Snakefile` in `config.yaml`.
+- `generate_data.py` contains files for generating training and validation data. The data should be saved in data. Data generation is independent of the workflow in `Snakefile`.
