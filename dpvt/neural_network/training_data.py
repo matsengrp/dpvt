@@ -1,4 +1,5 @@
 import random
+import pickle
 from itertools import (
     combinations,
     permutations,
@@ -224,30 +225,52 @@ def collate_sequences(trees):
 
 SAMPLE_SIZE = 240
 assert SAMPLE_SIZE % 2 == 0
-site4_good_trees = []
-# generate "good" trees for training by concatenating 2 "good" sites with 1 "bad" and
-# 1 "neutral", shuffled in random site-order
-for _ in range(SAMPLE_SIZE // 2):
-    t1 = random.choice(good_trees[:12])
-    t2 = random.choice(good_trees[:12])
-    t3 = random.choice(bad_trees[:12])
-    t4 = random.choice(neutral_trees[:12])
-    # t4 = random.choice(good_trees[:12])
-    t1, t2, t3, t4 = random.sample([t1, t2, t3, t4], 4)
-    tree = collate_sequences([t1, t2, t3, t4])
-    assign_features(tree)
-    site4_good_trees.append(tree)
+seed = 21032024
 
-site4_bad_trees = []
-# generate "good" trees for training by concatenating 2 "bad" sites with 1 "good" and
-# 1 "neutral", shuffled in random site-order
-for _ in range(SAMPLE_SIZE // 2):
-    t1 = random.choice(good_trees[:12])
-    t2 = random.choice(neutral_trees[:12])
-    # t2 = random.choice(bad_trees[:12])
-    t3 = random.choice(bad_trees[:12])
-    t4 = random.choice(bad_trees[:12])
-    t1, t2, t3, t4 = random.sample([t1, t2, t3, t4], 4)
-    tree = collate_sequences([t1, t2, t3, t4])
-    assign_features(tree)
-    site4_bad_trees.append(tree)
+def create_site4_good_trees(n_trees=SAMPLE_SIZE // 2, seed=None):
+    """
+    generate "good" trees for training by concatenating 2 "good" sites with 1 "bad" and
+    1 "neutral", shuffled in random site-order
+    """
+    if seed is not None:
+        random.seed(seed)
+    trees = []
+    for _ in range(n_trees):
+        t1 = random.choice(good_trees[:12])
+        t2 = random.choice(good_trees[:12])
+        t3 = random.choice(bad_trees[:12])
+        t4 = random.choice(neutral_trees[:12])
+        t1, t2, t3, t4 = random.sample([t1, t2, t3, t4], 4)
+        tree = collate_sequences([t1, t2, t3, t4])
+        assign_features(tree)
+        trees.append(tree)
+    return trees
+
+site4_good_trees = create_site4_good_trees(seed=seed)
+file_name = f"4site_4leaf_{SAMPLE_SIZE}good_trees_{seed}seed.pickle"
+with open(file_name, "wb") as fh:
+    pickle.dump(site4_good_trees, fh)
+
+def create_site4_bad_trees(n_trees=SAMPLE_SIZE // 2, seed=None):
+    """
+    generate "bad" trees for training by concatenating 2 "bad" sites with 1 "good" and
+    1 "neutral", shuffled in random site-order
+    """
+    if seed is not None:
+        random.seed(seed)
+    trees = []
+    for _ in range(n_trees):
+        t1 = random.choice(bad_trees[:12])
+        t2 = random.choice(bad_trees[:12])
+        t3 = random.choice(good_trees[:12])
+        t4 = random.choice(neutral_trees[:12])
+        t1, t2, t3, t4 = random.sample([t1, t2, t3, t4], 4)
+        tree = collate_sequences([t1, t2, t3, t4])
+        assign_features(tree)
+        trees.append(tree)
+    return trees
+    
+site4_bad_trees = create_site4_bad_trees(seed=seed)
+file_name = f"4site_4leaf_{SAMPLE_SIZE}bad_trees_{seed}seed.pickle"
+with open(file_name, "wb") as fh:
+    pickle.dump(site4_bad_trees, fh)

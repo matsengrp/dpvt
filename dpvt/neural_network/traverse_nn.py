@@ -141,9 +141,10 @@ class TraverseNN(L.LightningModule):
                 node.to_parent["feature_1"] = feature_1
         # leaf-ward traversal -> skip for now
         # logits = self.up_traverse_stack(x)
-        # feed root feature into final layer
+        # feed root feature into transformer encoder
         out = self.encoder(tree.to_parent["feature_1"])
         # print("out =", out)
+        # feed transformer output into final layer
         logit = self.final_on_site(out)
         # print("logit =", logit)
         logit = self.final_across_sites(logit.squeeze())
