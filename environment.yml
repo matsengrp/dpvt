@@ -1,11 +1,9 @@
 name: dpvt
 channels:
   - conda-forge
-  - defaults
   - bioconda
-
+  - defaults
 dependencies:
-  - python=3.9
   - biopython
   - click
   - ete3
@@ -16,4 +14,9 @@ dependencies:
   - numpy
   - pandas
   - pytest
+  - python=3.9
   - pytorch
+  - lightning
+  - tensorboard
+  - snakemake
+  - pytorch-lightning

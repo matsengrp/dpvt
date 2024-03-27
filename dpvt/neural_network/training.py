@@ -9,7 +9,7 @@ from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.callbacks import ModelCheckpoint
 
 from dpvt.neural_network.traverse_nn import TraverseNN
-from dpvt.neural_network.training_data import (
+from dpvt.generate_data.training_data import (
     good_trees,
     bad_trees,
     site4_good_trees,

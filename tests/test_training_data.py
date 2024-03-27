@@ -1,5 +1,5 @@
 from ete3 import Tree
-from dpvt.neural_network.training_data import (
+from dpvt.generate_data.training_data import (
     good_trees,
     bad_trees,
     mutation_count,

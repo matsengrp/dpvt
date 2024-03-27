@@ -4,12 +4,13 @@ import torch.nn.functional as F
 import lightning as L
 from ete3 import Tree
 
-# transformer hyperparameters
+# transformer parameters
 d_model_per_head = 2
 nhead = 2
 d_model = nhead * d_model_per_head
 dim_feedforward = 8
 layer_count = 4
+learning_rate = 0.01
 
 
 class TraverseNN(L.LightningModule):
@@ -21,17 +22,17 @@ class TraverseNN(L.LightningModule):
     The forward function applies two traversals to the input tree, first root-ward and
     then leaf-ward.
 
-    For now, we only implement the root-ward traverseal.
+    For now, we only implement the root-ward traversal.
 
     Attributes:
         up_traverse_stack
         final
     """
 
-    def __init__(self):
+    def __init__(self, learning_rate):
         super().__init__()
         # learning rate
-        self.lr = 0.01
+        self.lr = learning_rate
         self.up_traverse_stack = nn.Sequential(
             nn.Linear(16, 32),
             nn.ReLU(),
@@ -142,11 +143,12 @@ class TraverseNN(L.LightningModule):
         # leaf-ward traversal -> skip for now
         # logits = self.up_traverse_stack(x)
         # feed root feature into transformer encoder
-        out = self.encoder(tree.to_parent["feature_1"])
+        logit = self.encoder(tree.to_parent["feature_1"])
         # print("out =", out)
         # feed transformer output into final layer
-        logit = self.final_on_site(out)
         # print("logit =", logit)
+        if n_sites > 1:
+            logit = self.final_on_site(logit)
         logit = self.final_across_sites(logit.squeeze())
         return logit
 
