@@ -2,43 +2,54 @@ from ete3 import Tree
 from itertools import (
     permutations as perms,
     combinations as combs,
-    combinations_with_replacement as combs_r,
     product as prod,
-    repeat,
     chain,
 )
-from time import time
-import numpy as np
+from dpvt.scripts.minimal_covers import MinimalCovers
+from math import ceil
 
 
 class PerfectPhylogeny:
     """
-    A class to determine multiple sequence alignments and mutation histories that form
-    a perfect phylogeny for a given tree topology. This class supports varying levels of
+    A class to determine multiple sequence alignments and mutation histories that form a
+    perfect phylogeny for a given tree topology. This class supports varying levels of
     strictness for a perfect phylogeny. By default, we take a perfect phylogeny to be a
-    topology with sequences on all nodes such that for each site and for each allowed
-    character, the subgraph of nodes with the given character at the given site is
-    connected and contains a leaf node. Options allow for requiring tip sequences to be
-    unique, that no two columns in the sequence alignment (of all nodes) are identical,
-    that every edge has at least one substition, and/or every non-terminal edge has at
-    least one substition.
+    topology with sequences on all nodes such that 1) for each site and for each
+    character appearing at the site, the subgraph of nodes with the given character at
+    the given site is connected and contains a leaf node; 2) every non-terminal edge
+    has at least one substitution; and 3) omitting any single site violates 2). Options
+    allow for requiring in 2) that every edge has a substitution and for requiring tip
+    sequences to be unique (currently not supported).
 
     The standard use case is to create an instance of the this class from a given ete3
-    Tree and call make_trees to generate perfect phylogenies on the tree.
+    Tree and call make_trees to get a generator perfect phylogenies on the tree, or
+    call make_random_tree to get a single perect phylogeny.
+    """
 
+    """
     Attributes:
+        bad_root_patterns (set): The set of tuples of node indices not allowed as
+            mutations near the root.
+        cherry_index_pairs (set): The set of pairs of leaf indices (leaf1, leaf2), 
+            where the two leaves are siblings and leaf1.node_index < leaf2.node_index.
         internal_node_count (int): The number of non-root non-leaf nodes.
-        internal_node_indices (set): The set of internal node indices, which is a
-            subset of the values of the dictionary node_index.
+        internal_node_indices (set): The set of internal node indices.
         leaf_count (int): The number of leaf nodes in the topology.
-        leaf_indices (set): The set of leaf node indices, which is a subset of the
-            values of the dictionary node_index.
+        leaf_indices (set): The set of leaf node indices.
+        mutation_internal_node_index_sets (tuple of sets): The entries of 
+            mutation_node_index_sets restricted to internal nodes.
+        mutation_leaf_node_index_sets (tuple of sets): The entries of 
+            mutation_node_index_sets restricted to leaf nodes.     
+        mutation_node_index_sets (tuple of sets): Each inner set gives the indices of 
+            nodes where mutations occur, such that the number of mutations is at most 
+            (state_count - 1). This means the mutations can be chosen to produce a 
+            perfect phylogeny.
         node_count (int): The number of nodes in the topology.
-        node_index (dict): A dictionary mapping a node of the topology to its index in
-            the list of nodes. Note the root node always has index 0.
+        node_indices (set): The set of node indices.
         nodes (tuple of ete3.Trees): Tuple of all nodes of the topology in preorder
-            traversal. The node indices used throughout this class are indices into this
-            tuple. Note the root node always has index 0.
+            traversal, with all internal nodes appearing before any leaf nodes. The 
+            node indices used throughout this class are indices into this tuple. Note 
+            the root node always has index 0.                                 
         state_count (int): The number of states.
         state_permutations (dict): A dictionary mapping an integer r to the tuple of
             permutations using r elements of self.states. The states are used to convert
@@ -64,84 +75,37 @@ class PerfectPhylogeny:
 
         self.tree = tree.copy()
         self.states = states
-        """(tuple): The allowed characters in sequences."""
         self.state_count = len(self.states)
-        self.nodes = tuple(self.tree.traverse(strategy="preorder"))
-        """(tuple of ete3.Trees): Tuple of all nodes of the topology in preorder
-        traversal. The node indices used throughout this class are indices into this
-        tuple. Note the root node always has index 0."""
-        self.node_count = len(self.nodes)
-
-        for i, node in enumerate(self.nodes):
-            node.add_feature("node_index", i)
-
-        self.leaf_indices = {leaf.node_index for leaf in self.nodes if leaf.is_leaf()}
-        self.internal_node_indices = {
-            node.node_index
-            for node in self.nodes
-            if not (node.is_leaf() or node.is_root())
-        }
-        self.leaf_count = len(self.leaf_indices)
-        self.internal_node_count = self.node_count - self.leaf_count - 1
-        assert self.internal_node_count == len(self.internal_node_indices)
         self.state_permutations = {
             r: tuple(perms(self.states, r)) for r in range(1, self.state_count + 1)
         }
 
-        self.cherry_index_pairs = None
-        """The set of pairs of leaf indices (leaf1, leaf2), where the two leaves are 
-        siblings and leaf1.node_index < leaf2.node_index."""
-        self.bad_root_patterns = None
-        """The set of tuples of node indices not allowed as mutations near the root."""
-        self.mutation_node_index_sets = None
-        """(tuple of sets): Each inner set gives the indices of nodes where mutations 
-        occur, such that the number of mutations is at most (state_count - 1). This 
-        means the mutations can be chosen to produce a perfect phylogeny."""
-        self.mutation_internal_node_index_sets = None
-        """(tuple of sets): The entries of mutation_node_index_sets restricted to 
-        internal nodes."""
-        self.mutation_leaf_node_index_sets = None
-        """(tuple of sets): The entries of mutation_node_index_sets restricted to leaf 
-        nodes."""
-        self.state_tuples = None
-        """(tuple of tuple): Each inner tuple is of length self.node_count,
-        with the entry at a given node_index being an integer from 0 to
-        (state_count - 1); applying any bijection from
-        {0, 1, ..., (self.state_count - 1)} to self.states yields a labelled
-        topology satisfying the subgraph criteria of a perfect phylogeny. The inner
-        tuple at a given index is derived from the set at the same index in
-        self.mutation_node_index_sets."""
+        nodes = []
+        next_index = 0
+        for node in self.tree.traverse(strategy="preorder"):
+            if not node.is_leaf():
+                node.add_feature("node_index", next_index)
+                nodes.append(node)
+                next_index += 1
+        self.internal_node_indices = set(range(1, next_index))
+        self.internal_node_count = next_index - 1
+        first_leaf_index = next_index
+        for node in self.tree.get_leaves():
+            node.add_feature("node_index", next_index)
+            nodes.append(node)
+            next_index += 1
+        self.leaf_indices = set(range(first_leaf_index, next_index))
+        self.leaf_count = next_index - first_leaf_index
+        self.nodes = tuple(nodes)
+        self.node_count = next_index
+        self.node_indices = set(range(self.node_count))
+
         self.make_bad_root_patterns()
         self.make_cherry_index_pairs()
         self.make_mutation_index_sets()
         self.make_mutation_internal_node_index_sets()
         self.make_mutation_leaf_node_index_sets()
         self.make_state_tuples()
-
-        # CJS: This is work in progress for random sampling. Ignore for now.
-        # self.rng = np.random.default_rng()
-        # self.make_indices()
-        # self.shuffle_indices()
-
-    # def make_indices(self):
-    #    """...
-    #    first coordinate is needed if we want to have order of sites consistent with other thing
-    #    """
-    #    N = self.node_count - 1
-    #    combo_counts = [1, N, N * (N - 1) // 2, N * (N - 1) * (N - 2) // 6]
-    #    offsets = [0, *np.cumsum(combo_counts)[:-1]]
-    #    perm_counts = [4, 12, 24, 24]
-    #    self.indices = [
-    #        (i + 1, offsets[i] + j, k)
-    #        for i in range(4)
-    #        for j in range(combo_counts[i])
-    #        for k in range(perm_counts[i])
-    #    ]
-    #    return None
-    #
-    # def shuffle_indices(self):
-    #    self.rng.shuffle(self.indices)
-    #    return None
 
     def make_bad_root_patterns(self):
         """
@@ -322,40 +286,20 @@ class PerfectPhylogeny:
 
         return tree
 
-    def perms_for_states(self, state_tuples_indices):
+    def perms_for_states(self, state_tuples_indices, skip_perms=False):
         """
         Returns a tuple of tuples. The i-th inner tuple consists of the valid indices
         into self.state_permutations[r], where r is the number of different states
         contained in the entry of self.state_tuples at index state_tuples_indices[i].
         """
         r = lambda i: len(self.mutation_node_index_sets[i]) + 1
-        return tuple(
-            tuple(range(len(self.state_permutations[r(i)])))
-            for i in state_tuples_indices
-        )
-
-    def are_there_subs_on_all_nodes(self, index_sets_indices):
-        """
-        Returns the truth value for the specified sets of mutations in
-        self.mutation_node_index_sets (equivalently, the entries in self.state_tuples)
-        giving a perfect phylogeny where every non-root node has at least one mutation.
-        """
-        node_indices = (self.mutation_node_index_sets[i] for i in index_sets_indices)
-        subbed_node_count = len(set(chain(*node_indices)))
-        return subbed_node_count == self.node_count - 1
-
-    def are_there_subs_on_all_internal_nodes(self, index_sets_indices):
-        """
-        Returns the truth value for the specified sets of mutations in
-        self.mutation_node_index_sets (equivalently, the entries in self.state_tuples)
-        giving a perfect phylogeny where every non-root non-leaf node has at least one
-        mutation.
-        """
-        node_indices = (
-            self.mutation_internal_node_index_sets[i] for i in index_sets_indices
-        )
-        subbed_node_count = len(set(chain(*node_indices)))
-        return subbed_node_count == self.internal_node_count
+        if skip_perms:
+            return tuple((0,) for i in state_tuples_indices)
+        else:
+            return tuple(
+                tuple(range(len(self.state_permutations[r(i)])))
+                for i in state_tuples_indices
+            )
 
     def are_cherries_distinct(self, index_sets_indices):
         indices = (self.mutation_leaf_node_index_sets[i] for i in index_sets_indices)
@@ -367,118 +311,82 @@ class PerfectPhylogeny:
             )
         )
 
+    def make_random_tree(
+        self,
+        use_seq=False,
+        use_sub=True,
+        unique_leaves=False,
+        sub_on_all_edges=False,
+    ):
+        """
+        Returns a random perfect phylogeny meeting the given criteria.
+        Currently we don't randomize the site permutations.
+        """
+        return next(
+            self.make_trees(
+                use_seq=use_seq,
+                use_sub=use_sub,
+                unique_leaves=unique_leaves,
+                sub_on_all_edges=sub_on_all_edges,
+                shuffle=True,
+                skip_perms=True,
+            )
+        )
+
     def make_trees(
         self,
         use_seq=True,
-        use_sub=True,
+        use_sub=False,
         unique_leaves=False,
-        distinct_sites=False,
         sub_on_all_edges=False,
-        sub_on_all_internal=False,
         min_sites=1,
-        max_sites=1,
+        max_sites=None,
+        skip_perms=False,
+        shuffle=False,
     ):
         """
-        Returns a generator for the perfect phylogenies, with nodes optionally labelled
-        with sequences or substitions, meeting the given requirement. The generator
-        produces all perfect phylogenies meeting the criteria, but without duplicates
-        from permuting the order of sites in the sequences.
+        Returns a generator for the perfect phylogenies meeting the given criteria.
         """
-        sites_will_repeat = PerfectPhylogeny.paired_repeat
-        next_tree = self.make_tree
-        n = len(self.state_tuples)
+        # The minimum number of sites to produce a perfect phylogeny is
+        # ceil(number of edges required subs / maximum number of mutations in a site),
+        # which is either ceil((self.leaf_count - 2) / (self.state_count - 1))
+        # or ceil((self.node_count - 1) / (self.state_count - 1)).
+        # Currently min and max sites are handled by filtering after making the
+        # generator, which can be slow. In particular, a bad choice of max sites would
+        # mean enumerating all perfect phylogenies just to find none have the allowed
+        # number of sites.
+        if unique_leaves:
+            raise NotImplementedError("Code isn't ready yet.")
 
         if sub_on_all_edges:
-            state_checks = self.are_there_subs_on_all_nodes
-        elif sub_on_all_internal:
-            if unique_leaves:
-                state_checks = lambda x: (
-                    self.are_there_subs_on_all_internal_nodes(x)
-                    and self.are_cherries_distinct(x)
-                )
-            else:
-                state_checks = self.are_there_subs_on_all_internal_nodes
+            site_min = ceil((self.node_count - 1) / (self.state_count - 1))
         else:
-            raise NotImplementedError("Annoying case.")
+            site_min = ceil((self.leaf_count - 2) / (self.state_count - 1))
+        site_min = max(site_min, min_sites)
+        if max_sites is not None:
+            if max_sites < site_min:
+                raise ValueError(f"Max_sites must be at least {site_min}.")
+            length_check = lambda s: site_min <= len(s) <= max_sites
+        else:
+            length_check = lambda s: site_min <= len(s)
+        which_edges = "all" if sub_on_all_edges else "internal"
+
+        state_tuple_indices_gen = (
+            state_tuple_indices
+            for state_tuple_indices in MinimalCovers(
+                self, which_edges, shuffle_indices=shuffle
+            )
+            if length_check(state_tuple_indices)
+        )
 
         trees = (
-            next_tree(use_seq, use_sub, state_tuples_indices, perm_indices)
-            for m in range(min_sites, max_sites + 1)
-            for state_tuples_indices in combs_r(range(n), m)
-            if state_checks(state_tuples_indices)
-            for perm_indices in prod(*self.perms_for_states(state_tuples_indices))
-            if not (
-                distinct_sites and sites_will_repeat(state_tuples_indices, perm_indices)
+            self.make_tree(use_seq, use_sub, state_tuples_indices, perm_indices)
+            for state_tuples_indices in state_tuple_indices_gen
+            for perm_indices in prod(
+                *self.perms_for_states(state_tuples_indices, skip_perms)
             )
         )
         return trees
-
-    # def sample_indices(self, n, replace):
-    #    # Sampling perfect phylos without replacement would require bookkeeping at this step.
-    #    index_samples = sorted(
-    #        self.rng.choice(
-    #            self.indices, size=n, replace=replace, shuffle=False
-    #        ).tolist()
-    #    )
-    #    _, state_lists_indices, permutation_indices = zip(*index_samples)
-    #    return state_lists_indices, permutation_indices
-    #
-    # def random_tree_gen(
-    #    self,
-    #    use_seq=True,
-    #    use_sub=True,
-    #    unique_leaves=True,
-    #    distinct_sites=True,
-    #    sub_on_all_edges=False,
-    #    sub_on_all_internal=True,
-    #    sites=1,
-    #    max_tries=None,
-    # ):
-    #    """
-    #    ...
-    #    """
-    #    # Catch the empty generator case and return an empty tuple.
-    #    all_trees = self.make_trees(
-    #        use_seq,
-    #        use_sub,
-    #        unique_leaves,
-    #        distinct_sites,
-    #        sub_on_all_edges,
-    #        sub_on_all_internal,
-    #        sites,
-    #        sites,
-    #    )
-    #    try:
-    #        next(all_trees)
-    #    except StopIteration:
-    #        return ()
-    #
-    #    sample_indices = lambda: self.sample_indices(sites, replace=not distinct_sites)
-    #    next_tree = lambda x, y: self.make_tree(use_seq, use_sub, x, y, unique_leaves)
-    #    edge_checks = lambda x: all(
-    #        (
-    #            not sub_on_all_edges or self.do_lists_mut_all_nodes0(x),
-    #            not sub_on_all_internal or self.do_lists_mut_internal_nodes(x),
-    #        )
-    #    )
-    #    tries = repeat(0) if max_tries is None else repeat(0, max_tries)
-    #    return (
-    #        tree[0]
-    #        for _ in tries
-    #        if edge_checks((states_and_perms := sample_indices())[0])
-    #        if (tree := next_tree(*states_and_perms))[1]
-    #    )
-
-    @staticmethod
-    def paired_repeat(list1, list2):
-        """
-        Returns the truth value of the two lists having a consecutive repeated value at
-        the same index.
-        """
-        n = len(list1) - 1
-        return any(
-            (list1[i] == list1[i + 1] and list2[i] == list2[i + 1] for i in range(n))
-        )
 
     @staticmethod
     def print_columns(tree):

@@ -1,17 +1,16 @@
 #!/usr/bin/env python
 import click
 from ete3 import Tree
-from perfect_phylogeny import PerfectPhylogeny
+from dpvt.scripts.perfect_phylogeny import PerfectPhylogeny
+from dpvt.scripts.utils import newick_bare, newick_seq, newick_sub, newick_seq_sub
 
 
 h1 = "Label the nodes of the topology with sequences."
 h2 = "Label the nodes of the topology with substitutions."
 h3 = "Require leaf nodes to have unique sequences."
-h4 = "Require no two site columns are identical (among all nodes)."
-h5 = "Require every edge has at least one substitution."
-h6 = "Require every non-terminal edge has at least one substitution."
-h7 = "Minimum number of sites in the sequence alignment."
-h8 = "Maximum number of sites in the sequence alignment."
+h4 = "Require every edge has at least one substitution."
+h5 = "Minimum number of sites in the sequence alignment."
+h6 = "Maximum number of sites in the sequence alignment."
 
 
 @click.command()
@@ -20,28 +19,18 @@ h8 = "Maximum number of sites in the sequence alignment."
 @click.option("--seq/--no-seq", "use_seq", default=True, help=h1)
 @click.option("--sub/--no-sub", "use_sub", default=True, help=h2)
 @click.option("--unique-leaves", is_flag=False, flag_value=True, default=False, help=h3)
-@click.option(
-    "--distinct-sites", is_flag=False, flag_value=True, default=False, help=h4
-)
-@click.option(
-    "--sub-on-all-edges", is_flag=False, flag_value=True, default=False, help=h5
-)
-@click.option(
-    "--sub-on-all-internal", is_flag=False, flag_value=True, default=False, help=h6
-)
-@click.option("--min-sites", default=1, help=h7)
-@click.option("--max-sites", default=1, help=h8)
+@click.option("--sub-all-edges", is_flag=False, flag_value=True, default=False, help=h4)
+@click.option("--min-sites", default=1, help=h5)
+@click.option("--max-sites", default=None, type=int, help=h6)
 def run(
     input_file,
     output_file,
     use_seq=True,
     use_sub=True,
     unique_leaves=False,
-    distinct_sites=False,
-    sub_on_all_edges=False,
-    sub_on_all_internal=False,
+    sub_all_edges=False,
     min_sites=1,
-    max_sites=1,
+    max_sites=None,
 ):
     """
     Args:
@@ -63,14 +52,7 @@ def run(
                 tree = Tree(newick)
                 phylogeny_maker = PerfectPhylogeny(tree)
                 p_phylos = phylogeny_maker.make_trees(
-                    use_seq,
-                    use_sub,
-                    unique_leaves,
-                    distinct_sites,
-                    sub_on_all_edges,
-                    sub_on_all_internal,
-                    min_sites,
-                    max_sites,
+                    use_seq, use_sub, unique_leaves, sub_all_edges, min_sites, max_sites
                 )
                 j = -1
                 for j, p_phylo in enumerate(p_phylos):
@@ -78,28 +60,6 @@ def run(
                     if (j + 1) % 10000 == 0:
                         print(f"  {j+1} phylogenies found...")
                 print(f"Wrote {j+1} perfect phylogenies for topology {i}.")
-
-
-def newick_bare(tree):
-    return tree.write(format=9)
-
-
-def newick_seq(tree):
-    non_root = tree.write(features=["sequence"], format=9)[:-1]
-    root = f"[&&NHX:sequence={tree.sequence}];\n"
-    return non_root + root
-
-
-def newick_sub(tree):
-    non_root = tree.write(features=["subs"], format=9)[:-1]
-    root = "[&&NHX:subs={}];\n"
-    return non_root + root
-
-
-def newick_seq_sub(tree):
-    non_root = tree.write(features=["sequence", "subs"], format=9)[:-1]
-    root = f"[&&NHX:sequence={tree.sequence}:subs={{}}];\n"
-    return non_root + root
 
 
 if __name__ == "__main__":
