@@ -68,7 +68,7 @@ test_loader = DataLoader(test_data, batch_size=BATCH_SIZE, collate_fn=custom_col
 
 # use pytorch lightning
 tnn = TraverseNN()
-logger = TensorBoardLogger(save_dir="lightning_logs", name="TNN_4leaf_4sites_v0")
+logger = TensorBoardLogger(save_dir="lightning_logs", name="TNN_4leaf_4sites_v1")
 # choose how often to save model checkpoints
 checkpoint_callback = ModelCheckpoint(every_n_epochs=10, save_top_k=-1)
 trainer = L.Trainer(
