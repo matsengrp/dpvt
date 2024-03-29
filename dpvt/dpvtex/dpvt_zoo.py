@@ -21,7 +21,7 @@ def train_model(model_name, data_name, final_checkpoint, **wrap_kwargs):
     # hyperparameter
     learning_rate = 0.01
     # model parameters
-    default_params = {"batch_size": 16, "epochs": 100}
+    default_params = {"batch_size": 1024, "epochs": 200}
     # Update default parameters with any provided keyword arguments
     wrap_params = {**default_params, **wrap_kwargs}
     train_data, val_data = train_val_data_of_nicknames(data_name)
