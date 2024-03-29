@@ -142,9 +142,7 @@ class TraverseNN(L.LightningModule):
         # leaf-ward traversal -> skip for now
         # logits = self.up_traverse_stack(x)
         # feed root feature into transformer encoder
-        encoder_input = tree.to_parent["feature_1"].unsqueeze(
-            1
-        )  # batch_size = n_sites, i.e. 1 batch, as we only have one sequence
+        encoder_input = tree.to_parent["feature_1"].unsqueeze(1)  # batch_size = 1
         # we only take first output -- alternatives: mean, max pooling
         out = self.encoder(encoder_input)[0]  # dim [batch_size, feature_size]
         logit = self.classifier(out)
