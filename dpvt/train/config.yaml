@@ -1,2 +1,2 @@
-models: ["traverseNN"]
-data: ["FourLeafFourSite", "FourLeaf"]
+models: ["EncoderTraversal", "traverseNN"]
+data: ["FourLeaf", "FourLeafFourSite"]

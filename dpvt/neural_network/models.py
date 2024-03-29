@@ -6,9 +6,7 @@ from ete3 import Tree
 
 # transformer parameters
 nhead = 2
-d_model = (
-    4  # size of embedding that we feed into transformer, i.e. length of mutation vector
-)
+d_model = 4  # size of embedding that we feed into transformer, i.e. length of mutation vector
 dim_feedforward = 8
 layer_count = 4
 learning_rate = 0.01
@@ -67,8 +65,12 @@ class TraverseNN(L.LightningModule):
         prob_predictions = F.sigmoid(pred)
         pos_predictions = prob_predictions[yb < 0.5]
         neg_predictions = prob_predictions[yb >= 0.5]
-        self.log("pos_prediction_avg", torch.mean(pos_predictions), prog_bar=True)
-        self.log("neg_prediction_avg", torch.mean(neg_predictions), prog_bar=True)
+        self.log(
+            "pos_prediction_avg", torch.mean(pos_predictions), prog_bar=True
+        )
+        self.log(
+            "neg_prediction_avg", torch.mean(neg_predictions), prog_bar=True
+        )
         # self.log_dict({"label": yb[0], "prediction": F.sigmoid(pred[0])}, prog_bar=True)
         return loss
 
@@ -135,14 +137,20 @@ class TraverseNN(L.LightningModule):
                     right_feature_1 = child2.to_parent["feature_1"][i]
                     # print("right_0:", right_feature_0)
                     # print("right_1:", right_feature_1)
-                    left_data = torch.cat((left_feature_0, left_feature_1), dim=0)
-                    right_data = torch.cat((right_feature_0, right_feature_1), dim=0)
+                    left_data = torch.cat(
+                        (left_feature_0, left_feature_1), dim=0
+                    )
+                    right_data = torch.cat(
+                        (right_feature_0, right_feature_1), dim=0
+                    )
                     feature_1[i] = self.node_aggregate(left_data, right_data)
                 node.to_parent["feature_1"] = feature_1
         # leaf-ward traversal -> skip for now
         # logits = self.up_traverse_stack(x)
         # feed root feature into transformer encoder
-        encoder_input = tree.to_parent["feature_1"].unsqueeze(1)  # batch_size = 1
+        encoder_input = tree.to_parent["feature_1"].unsqueeze(
+            1
+        )  # batch_size = 1
         # we only take first output -- alternatives: mean, max pooling
         out = self.encoder(encoder_input)[0]  # dim [batch_size, feature_size]
         logit = self.classifier(out)
@@ -164,3 +172,94 @@ class TraverseNN(L.LightningModule):
         output = self.up_traverse_stack(torch.cat((left_data, right_data)))
         # output += self.up_traverse_stack(torch.cat((right_data, left_data)))
         return output.unsqueeze(dim=0)
+
+
+class EncoderTraversal(TraverseNN):
+    """
+    A pytorch module which takes a list of ete3.Trees as input and outputs 0's and 1's
+    to indicate whether each input tree is maximally parsimonious or not, respectively,
+    for the sequences assigned to the leaf nodes.
+
+    The forward function first encodes the mutation features using a transformer encode
+    and then applies two traversals to the input tree, first root-ward and then leaf-ward
+
+    For now, we only implement the root-ward traversal.
+
+    Attributes:
+        up_traverse_stack
+        final
+    """
+
+    def forward_on_tree(self, tree: Tree):
+        """
+        Takes an ete3.Tree as input and outputs a 0 or 1 to indicate whether the input
+        tree is maximally parsimonious or not, respectively, for the sequences assigned
+        to the leaf nodes.
+        Args:
+            tree (ete3 Tree): each node has a torch tensor attribute
+                to_parent["feature_0"] that encodes the mutation between the node and
+                its parent, e.g. A -> G is encoded by [-1, 1, 0, 0]
+        """
+        # transform input to tensor of correct format for TransformerEncoder
+        input = [node.to_parent["feature_0"] for node in tree.traverse(strategy="postorder")]
+        input = torch.stack(input)
+        input = input.transpose(0,1) # swap first two dimensions -> [seq_length, batch_size, d_model]
+        out = self.encoder(input)
+        for node in tree.traverse(strategy="postorder"):
+            node.to_parent["encoding"] = out[0][1]
+
+        # tree = tree.copy()
+        # root-ward traversal
+        for node in tree.traverse(strategy="postorder"):
+            if node.is_leaf():
+                node.to_parent["feature_1"] = torch.zeros(4)
+            elif len(node.children) == 1:  # node is root with single child
+                assert node.up is None
+                child = node.children[0]
+                node.to_parent["feature_1"] = child.to_parent["feature_1"]
+            else:
+                feature_1 = torch.zeros(4)
+                try:
+                    child1, child2 = node.children
+                except ValueError:
+                    raise ValueError(
+                        f"Input tree must be bifurcating, but node has"
+                        "{len(node.children)} children"
+                    )
+                left_encoding = child1.to_parent["encoding"]
+                left_feature_1 = child1.to_parent["feature_1"]
+                right_encoding = child2.to_parent["encoding"]
+                right_feature_1 = child2.to_parent["feature_1"]
+                # print("right_0:", right_encoding)
+                # print("right_1:", right_feature_1)
+                left_data = torch.cat(
+                    (left_encoding, left_feature_1), dim=0
+                )
+                right_data = torch.cat(
+                    (right_encoding, right_feature_1), dim=0
+                )
+                feature_1 = self.node_aggregate(left_data, right_data)
+                node.to_parent["feature_1"] = feature_1
+        # leaf-ward traversal -> skip for now
+        # logits = self.up_traverse_stack(x)
+        # feed root feature into transformer encoder
+        out = node.to_parent["feature_1"]
+        logit = self.classifier(out).unsqueeze(1)
+        return logit
+
+    def node_aggregate(self, left_data, right_data):
+        """
+        pass concatenation of feature vectors
+        previous version: pass concatentation of feature vectors in both orders,
+            `(left, right)` and `(right, left)` and add outputs, to apply symmetry
+            constraint
+        """
+        # output = torch.cat(
+        #     [
+        #         self.up_traverse_stack(torch.cat((left_data[i], right_data[i])))
+        #         for i in range(left_data.size()[0])
+        #     ]
+        # )
+        output = self.up_traverse_stack(torch.cat((left_data, right_data)))
+        # output += self.up_traverse_stack(torch.cat((right_data, left_data)))
+        return output
