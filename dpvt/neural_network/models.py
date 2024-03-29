@@ -5,9 +5,10 @@ import lightning as L
 from ete3 import Tree
 
 # transformer parameters
-d_model_per_head = 2
 nhead = 2
-d_model = nhead * d_model_per_head
+d_model = (
+    4  # size of embedding that we feed into transformer, i.e. length of mutation vector
+)
 dim_feedforward = 8
 layer_count = 4
 learning_rate = 0.01
@@ -47,12 +48,9 @@ class TraverseNN(L.LightningModule):
             d_model=d_model,
             nhead=nhead,
             dim_feedforward=dim_feedforward,
-            batch_first=True,  # check this
         )
         self.encoder = nn.TransformerEncoder(self.encoder_layer, layer_count)
-        self.final_on_site = nn.Linear(4, 1)
-        self.final_across_sites = nn.Linear(4, 1)
-
+        self.classifier = nn.Linear(d_model, 1)
         # self.loss = nn.BCEWithLogitsLoss()
 
     def configure_optimizers(self):
@@ -63,11 +61,12 @@ class TraverseNN(L.LightningModule):
     def training_step(self, train_batch, batch_idx):
         xb, yb = train_batch
         pred = torch.cat([self.forward_on_tree(item) for item in xb])
-        loss = F.binary_cross_entropy_with_logits(pred, yb)
+        loss = F.binary_cross_entropy_with_logits(pred, yb.unsqueeze(1))
         self.log("train_loss", loss, batch_size=len(xb), on_epoch=True)
         # log predictions on positive- and negative-datapoints
-        pos_predictions = F.sigmoid(pred[yb < 0.5])
-        neg_predictions = F.sigmoid(pred[yb > 0.5])
+        prob_predictions = F.sigmoid(pred)
+        pos_predictions = prob_predictions[yb < 0.5]
+        neg_predictions = prob_predictions[yb >= 0.5]
         self.log("pos_prediction_avg", torch.mean(pos_predictions), prog_bar=True)
         self.log("neg_prediction_avg", torch.mean(neg_predictions), prog_bar=True)
         # self.log_dict({"label": yb[0], "prediction": F.sigmoid(pred[0])}, prog_bar=True)
@@ -76,7 +75,7 @@ class TraverseNN(L.LightningModule):
     def validation_step(self, val_batch, batch_idx):
         xb, yb = val_batch
         pred = torch.cat([self.forward_on_tree(item) for item in xb])
-        loss = F.binary_cross_entropy_with_logits(pred, yb)
+        loss = F.binary_cross_entropy_with_logits(pred, yb.unsqueeze(1))
         self.log("val_loss", loss, batch_size=len(xb))
 
     def forward(self, input, optimized=False):
@@ -143,13 +142,12 @@ class TraverseNN(L.LightningModule):
         # leaf-ward traversal -> skip for now
         # logits = self.up_traverse_stack(x)
         # feed root feature into transformer encoder
-        logit = self.encoder(tree.to_parent["feature_1"])
-        # print("out =", out)
-        # feed transformer output into final layer
-        # print("logit =", logit)
-        if n_sites > 1:
-            logit = self.final_on_site(logit)
-        logit = self.final_across_sites(logit.squeeze())
+        encoder_input = tree.to_parent["feature_1"].unsqueeze(
+            1
+        )  # batch_size = n_sites, i.e. 1 batch, as we only have one sequence
+        # we only take first output -- alternatives: mean, max pooling
+        out = self.encoder(encoder_input)[0]  # dim [batch_size, feature_size]
+        logit = self.classifier(out)
         return logit
 
     def node_aggregate(self, left_data, right_data):
