@@ -21,3 +21,9 @@ def newick_seq_sub(tree):
     non_root = tree.write(features=["sequence", "subs"], format=9)[:-1]
     root = f"[&&NHX:sequence={tree.sequence}:subs={{}}];\n"
     return non_root + root
+
+
+def newick_seq_random(tree):
+    non_root = tree.write(features=["sequence", "random_tree"], format=9)[:-1]
+    root = f"[&&NHX:sequence={tree.sequence}];\n"
+    return non_root + root

@@ -3,12 +3,12 @@ from ete4 import Tree as ete4Tree
 from historydag.parsimony import parsimony_score
 from dpvt.scripts.perfect_phylogeny import PerfectPhylogeny
 from dpvt.scripts.perturb_phylogeny import make_worse_tree
-from dpvt.scripts.utils import newick_seq
+from dpvt.scripts.utils import newick_seq, newick_seq_random
 import pandas as pd
 import numpy as np
 
 # A basic example of generating random topologies, assigning a perfect phylogeny,
-# and perturbing to get a higher parsimonyt score.
+# and perturbing to get a higher parsimony score.
 
 
 def try_it():
@@ -42,7 +42,7 @@ def try_it():
                 results["perturbed_depth"].append(depth)
                 p_tree = make_worse_tree(tree, depth, max_attempts=max_attempts)
                 if p_tree is not None:
-                    results["perturbed_tree"].append(newick_seq(p_tree))
+                    results["perturbed_tree"].append(newick_seq_random(p_tree))
                     results["perturbed_score"].append(parsimony_score(p_tree))
                 else:
                     results["perturbed_tree"].append("")
