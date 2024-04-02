@@ -204,7 +204,8 @@ class EncoderTraversal(TraverseNN):
         input = [node.to_parent["feature_0"] for node in tree.traverse(strategy="postorder")]
         input = torch.stack(input)
         input = input.transpose(0,1) # swap first two dimensions -> [seq_length, batch_size, d_model]
-        out = self.encoder(input)
+        # we have only one batch containing sequences for all nodes
+        out = self.encoder(input) # TransformerEncoder
         for node in tree.traverse(strategy="postorder"):
             node.to_parent["encoding"] = out[0][1]
 
