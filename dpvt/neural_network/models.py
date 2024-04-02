@@ -13,6 +13,10 @@ dim_feedforward = 8
 layer_count = 4
 learning_rate = 0.01
 
+# DNA states
+STATES = ["A", "G", "C", "T"]
+STATE_TO_IDX = {"A": 0, "G": 1, "C": 2, "T": 3}
+
 
 class TraverseNN(L.LightningModule):
     """
@@ -31,11 +35,10 @@ class TraverseNN(L.LightningModule):
         encoder_layer:
         encoder: transformer encoder used to summarize mutation data across all sizes,
             at a given node
-        final_on_site:
-        final_across_sites:
+        classifier:
     """
 
-    def __init__(self, learning_rate):
+    def __init__(self, learning_rate=0.01):
         super().__init__()
         # learning rate
         self.lr = learning_rate
@@ -53,6 +56,7 @@ class TraverseNN(L.LightningModule):
             d_model=d_model,
             nhead=nhead,
             dim_feedforward=dim_feedforward,
+            # batch_first=True,
         )
         self.encoder = nn.TransformerEncoder(self.encoder_layer, layer_count)
         self.classifier = nn.Linear(d_model, 1)
@@ -64,8 +68,8 @@ class TraverseNN(L.LightningModule):
 
     def training_step(self, train_batch, batch_idx):
         xb, yb = train_batch
-        pred = torch.cat([self.forward_on_tree(item) for item in xb])
-        loss = F.binary_cross_entropy_with_logits(pred, yb.unsqueeze(1))
+        pred = torch.stack([self.forward_on_tree(item) for item in xb])
+        loss = F.binary_cross_entropy_with_logits(pred, yb.unsqueeze(2))
         self.log("train_loss", loss, batch_size=len(xb), on_epoch=True)
         # log predictions on positive- and negative-datapoints, and show data in console
         # progress bar
@@ -78,8 +82,8 @@ class TraverseNN(L.LightningModule):
 
     def validation_step(self, val_batch, batch_idx):
         xb, yb = val_batch
-        pred = torch.cat([self.forward_on_tree(item) for item in xb])
-        loss = F.binary_cross_entropy_with_logits(pred, yb.unsqueeze(1))
+        pred = torch.stack([self.forward_on_tree(item) for item in xb])
+        loss = F.binary_cross_entropy_with_logits(pred, yb.unsqueeze(2))
         self.log("val_loss", loss, batch_size=len(xb))
 
     def forward(self, input, optimized=False):
@@ -116,6 +120,7 @@ class TraverseNN(L.LightningModule):
         """
         n_sites = len(tree.sequence)
         # tree = tree.copy()
+        self.assign_mutation_vectors(tree)
         # root-ward traversal
         for node in tree.traverse(strategy="postorder"):
             if node.is_leaf():
@@ -126,32 +131,57 @@ class TraverseNN(L.LightningModule):
                 node.to_parent["feature_1"] = child.to_parent["feature_1"]
             else:
                 feature_1 = torch.zeros((n_sites, 4))
+                try:
+                    child1, child2 = node.children
+                except ValueError:
+                    raise ValueError(
+                        f"Input tree must be bifurcating, but node has"
+                        "{len(node.children)} children"
+                    )
                 for i in range(n_sites):
-                    try:
-                        child1, child2 = node.children
-                    except ValueError:
-                        raise ValueError(
-                            f"Input tree must be bifurcating, but node has"
-                            "{len(node.children)} children"
-                        )
                     left_feature_0 = child1.to_parent["feature_0"][i]
                     left_feature_1 = child1.to_parent["feature_1"][i]
                     right_feature_0 = child2.to_parent["feature_0"][i]
                     right_feature_1 = child2.to_parent["feature_1"][i]
-                    # print("right_0:", right_feature_0)
-                    # print("right_1:", right_feature_1)
                     left_data = torch.cat((left_feature_0, left_feature_1), dim=0)
                     right_data = torch.cat((right_feature_0, right_feature_1), dim=0)
                     feature_1[i] = self.node_aggregate(left_data, right_data)
                 node.to_parent["feature_1"] = feature_1
-        # leaf-ward traversal -> skip for now
-        # logits = self.up_traverse_stack(x)
-        # feed root feature into transformer encoder
-        encoder_input = tree.to_parent["feature_1"].unsqueeze(1)  # batch_size = 1
+        # leaf-ward traversal
+        for node in tree.traverse(strategy="preorder"):
+            feature_1 = torch.zeros((n_sites, 4))
+            if node.is_root():
+                node.from_parent["feature_1"] = feature_1
+            elif node.up.is_root():
+                assert len(node.up.children) == 1, (
+                    "Error: root of tree should have single child"
+                )
+                node.from_parent["feature_1"] = feature_1
+            else:
+                parent = node.up
+                sister = node.get_sisters()[0]
+                for i in range(n_sites):
+                    up_feature_0 = parent.from_parent["feature_0"][i]
+                    up_feature_1 = parent.from_parent["feature_1"][i]
+                    side_feature_0 = sister.to_parent["feature_0"][i]
+                    side_feature_1 = sister.to_parent["feature_1"][i]
+                    up_data = torch.cat((up_feature_0, up_feature_1), dim=0)
+                    side_data = torch.cat((side_feature_0, side_feature_1), dim=0)
+                    feature_1[i] = self.node_aggregate(up_data, side_data)
+                node.from_parent["feature_1"] = feature_1
+        # feed node feature into transformer encoder
+        encoder_input = torch.stack([
+            torch.cat((node.to_parent["feature_1"], node.from_parent["feature_1"]))
+            for node in tree.traverse(strategy="preorder")
+        ])  # batch_size = 1
         # we only take first output -- alternatives: mean, max pooling
-        out = self.encoder(encoder_input)[0]  # dim [batch_size, feature_size]
-        logit = self.classifier(out)
-        return logit
+        n_nodes = encoder_input.size(dim=0)
+        out = torch.stack([
+            self.encoder(row)[0]  # dim [batch_size, feature_size]
+            for row in encoder_input
+        ])
+        logits = self.classifier(out) # .squeeze()
+        return logits
 
     def node_aggregate(self, left_data, right_data):
         """
@@ -164,3 +194,50 @@ class TraverseNN(L.LightningModule):
         output = self.up_traverse_stack(torch.cat((left_data, right_data)))
         # output += self.up_traverse_stack(torch.cat((right_data, left_data)))
         return output.unsqueeze(dim=0)
+
+    @staticmethod
+    def assign_mutation_vectors(tree):
+        """
+        modifies input tree by adding a `to_parent` dict attribute, where
+        `to_parent["feature_0"]` is a m-by-4 torch.tensor which records the mutation
+        from the node's parent to the (child) node, e.g., a mutation `A -> T` is encoded
+        as [...,[-1, 0, 0, 1],...]
+        Args:
+            tree (ete3 Tree): has sequence attribute on each node
+        Returns: None
+        """
+        n_sites = len(tree.sequence)
+        for node in tree.traverse():
+            for i in range(n_sites):
+                mut_vec = [0.0, 0.0, 0.0, 0.0]
+                if node.up is None:  # node is root
+                    pass
+                else:  # non-root node
+                    n_seq = node.sequence[i]
+                    p_seq = node.up.sequence[i]
+                    # except AttributeError:
+                    #     n_seq = node.name
+                    #     p_seq = node.up.name
+                    try:
+                        mut_vec[STATE_TO_IDX[n_seq]] += 1
+                        mut_vec[STATE_TO_IDX[p_seq]] -= 1
+                    except KeyError:
+                        raise ValueError(f"Each node sequence must be in {STATES}")
+                new_row = torch.tensor(mut_vec).unsqueeze(0)
+                if i == 0:
+                    node.add_feature("to_parent", {"feature_0": new_row})
+                    node.add_feature("from_parent", {"feature_0": -new_row})
+                else:
+                    node.to_parent["feature_0"] = torch.cat(
+                        (node.to_parent["feature_0"], new_row)
+                    )
+                    node.from_parent["feature_0"] = torch.cat(
+                        (node.from_parent["feature_0"], -new_row)
+                    )
+                # try:
+                #     node.to_parent["feature_0"] = torch.cat(
+                #         (node.to_parent["feature_0"], new_row)
+                #     )
+                # except AttributeError:
+                #     node.add_feature("to_parent", {"feature_0": new_row})
+        return None

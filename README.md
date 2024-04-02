@@ -48,7 +48,7 @@ As input, the neural network takes the `feature_0` and `feature_1` tensors of th
 4. For each edge, we combine the tensors `node.to_parent["feature_1"]` and `node.from_parent["feature_1"]` using the linear layer in `TraverseNN.final`, to produce a logit. 
 Negative values means the edge is in a maximum parsimony tree, while positive values means the edge is not in a maximum parsimony tree. 
 
-[Current implementation does not do steps 3 and 4, for simplicity]
+
 
 
 ## Logging training
