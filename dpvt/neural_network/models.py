@@ -174,7 +174,7 @@ class TraverseNN(L.LightningModule):
         return output.unsqueeze(dim=0)
 
 
-class EncoderTraversal(TraverseNN):
+class TransformerEncoderTraversal(TraverseNN):
     """
     A pytorch module which takes a list of ete3.Trees as input and outputs 0's and 1's
     to indicate whether each input tree is maximally parsimonious or not, respectively,
@@ -251,16 +251,6 @@ class EncoderTraversal(TraverseNN):
     def node_aggregate(self, left_data, right_data):
         """
         pass concatenation of feature vectors
-        previous version: pass concatentation of feature vectors in both orders,
-            `(left, right)` and `(right, left)` and add outputs, to apply symmetry
-            constraint
         """
-        # output = torch.cat(
-        #     [
-        #         self.up_traverse_stack(torch.cat((left_data[i], right_data[i])))
-        #         for i in range(left_data.size()[0])
-        #     ]
-        # )
         output = self.up_traverse_stack(torch.cat((left_data, right_data)))
-        # output += self.up_traverse_stack(torch.cat((right_data, left_data)))
         return output
