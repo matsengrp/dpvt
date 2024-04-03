@@ -6,11 +6,6 @@ Deep (neural networks for) Phylogenetics Via Traversals
 ```bash
 mamba env create -f environment.yml
 ```
-To install PyGeometric, which we may or may not use (I didn't put it in the environment 
-file): 
-```bash
-pip install torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.1.0+cpu.html
-```
 
 
 ## Training Workflow
@@ -58,9 +53,9 @@ Negative values means the edge is in a maximum parsimony tree, while positive va
 
 ## Logging training
 
-To train the model, run `python dpvt/neural_network/training.py`
+To train the model, run `snakemake --cores 1` in the directory `dpvt/train`.
 
-To view training logs, run `tensorboard --logdir .` and direct your browser to `http://localhost:6006/`
+To view training logs, run `tensorboard --logdir .` and direct your browser to `http://localhost:6006/`.
 
 
 ## File structure of this repo

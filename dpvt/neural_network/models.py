@@ -6,7 +6,9 @@ from ete3 import Tree
 
 # transformer parameters
 nhead = 2
-d_model = 4  # size of embedding that we feed into transformer, i.e. length of mutation vector
+d_model = (
+    4  # size of embedding that we feed into transformer, i.e. length of mutation vector
+)
 dim_feedforward = 8
 layer_count = 4
 learning_rate = 0.01
@@ -24,8 +26,13 @@ class TraverseNN(L.LightningModule):
     For now, we only implement the root-ward traversal.
 
     Attributes:
-        up_traverse_stack
-        final
+        up_traverse_stack: NN with single hidden layer, used to summarize mutation data
+            below a given node at a given site, by combining data from its two children
+        encoder_layer:
+        encoder: transformer encoder used to summarize mutation data across all sizes,
+            at a given node
+        final_on_site:
+        final_across_sites:
     """
 
     def __init__(self, learning_rate):
@@ -53,7 +60,6 @@ class TraverseNN(L.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
-        # optimizer = torch.optim.SGD(self.parameters(), lr=self.lr)
         return optimizer
 
     def training_step(self, train_batch, batch_idx):
@@ -61,17 +67,13 @@ class TraverseNN(L.LightningModule):
         pred = torch.cat([self.forward_on_tree(item) for item in xb])
         loss = F.binary_cross_entropy_with_logits(pred, yb.unsqueeze(1))
         self.log("train_loss", loss, batch_size=len(xb), on_epoch=True)
-        # log predictions on positive- and negative-datapoints
+        # log predictions on positive- and negative-datapoints, and show data in console
+        # progress bar
         prob_predictions = F.sigmoid(pred)
         pos_predictions = prob_predictions[yb < 0.5]
         neg_predictions = prob_predictions[yb >= 0.5]
-        self.log(
-            "pos_prediction_avg", torch.mean(pos_predictions), prog_bar=True
-        )
-        self.log(
-            "neg_prediction_avg", torch.mean(neg_predictions), prog_bar=True
-        )
-        # self.log_dict({"label": yb[0], "prediction": F.sigmoid(pred[0])}, prog_bar=True)
+        self.log("pos_prediction_avg", torch.mean(pos_predictions), prog_bar=True)
+        self.log("neg_prediction_avg", torch.mean(neg_predictions), prog_bar=True)
         return loss
 
     def validation_step(self, val_batch, batch_idx):
@@ -108,8 +110,9 @@ class TraverseNN(L.LightningModule):
         to the leaf nodes.
         Args:
             tree (ete3 Tree): each node has a torch tensor attribute
-                to_parent["feature_0"] that encodes the mutation between the node and
-                its parent, e.g. A -> G is encoded by [-1, 1, 0, 0]
+                to_parent["feature_0"], of size (n_sites, 4), that encodes the mutation
+                between the node and its parent, e.g. A -> G is encoded by
+                [..., [-1, 1, 0, 0], ...]
         """
         encoder_input = self.tree_traversal_mlp(tree)
         encoder_output = self.site_aggregation(encoder_input)
@@ -149,12 +152,8 @@ class TraverseNN(L.LightningModule):
                     left_feature_1 = child1.to_parent["feature_1"][i]
                     right_feature_0 = child2.to_parent[feature_name][i]
                     right_feature_1 = child2.to_parent["feature_1"][i]
-                    left_data = torch.cat(
-                        (left_feature_0, left_feature_1), dim=0
-                    )
-                    right_data = torch.cat(
-                        (right_feature_0, right_feature_1), dim=0
-                    )
+                    left_data = torch.cat((left_feature_0, left_feature_1), dim=0)
+                    right_data = torch.cat((right_feature_0, right_feature_1), dim=0)
                     feature_1[i] = self.node_aggregate(left_data, right_data)
                 node.to_parent["feature_1"] = feature_1
         return tree.to_parent["feature_1"]
@@ -170,17 +169,12 @@ class TraverseNN(L.LightningModule):
 
     def node_aggregate(self, left_data, right_data):
         """
-        pass concatenation of feature vectors
+        takes in concatenation of feature vectors from two children of a given node, and
+        outputs the `feature_1` vector for that node
         previous version: pass concatentation of feature vectors in both orders,
             `(left, right)` and `(right, left)` and add outputs, to apply symmetry
             constraint
         """
-        # output = torch.cat(
-        #     [
-        #         self.up_traverse_stack(torch.cat((left_data[i], right_data[i])))
-        #         for i in range(left_data.size()[0])
-        #     ]
-        # )
         output = self.up_traverse_stack(torch.cat((left_data, right_data)))
         # output += self.up_traverse_stack(torch.cat((right_data, left_data)))
         return output.unsqueeze(dim=0)
@@ -219,8 +213,7 @@ class TransformerEncoderTraversal(TraverseNN):
     def site_aggregation(self, tree: Tree):
         # transform input to tensor of correct format for TransformerEncoder
         input = [
-            node.to_parent["feature_0"]
-            for node in tree.traverse(strategy="postorder")
+            node.to_parent["feature_0"] for node in tree.traverse(strategy="postorder")
         ]
         input = torch.stack(input)
         input = input.transpose(
@@ -256,9 +249,7 @@ class TransformerEncoderTraversal(TraverseNN):
                 right_encoding = child2.to_parent[feature_name]
                 right_feature_1 = child2.to_parent["feature_1"]
                 left_data = torch.cat((left_encoding, left_feature_1), dim=0)
-                right_data = torch.cat(
-                    (right_encoding, right_feature_1), dim=0
-                )
+                right_data = torch.cat((right_encoding, right_feature_1), dim=0)
                 feature_1 = self.node_aggregate(left_data, right_data)
                 node.to_parent["feature_1"] = feature_1
         # leaf-ward traversal -> skip for now
