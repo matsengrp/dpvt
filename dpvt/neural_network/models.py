@@ -180,7 +180,7 @@ class TransformerEncoderTraversal(TraverseNN):
     to indicate whether each input tree is maximally parsimonious or not, respectively,
     for the sequences assigned to the leaf nodes.
 
-    The forward function first encodes the mutation features using a transformer encode
+    The forward function first encodes the mutation features using a transformer encoder
     and then applies two traversals to the input tree, first root-ward and then leaf-ward
 
     For now, we only implement the root-ward traversal.
@@ -204,8 +204,9 @@ class TransformerEncoderTraversal(TraverseNN):
         input = [node.to_parent["feature_0"] for node in tree.traverse(strategy="postorder")]
         input = torch.stack(input)
         input = input.transpose(0,1) # swap first two dimensions -> [seq_length, batch_size, d_model]
-        # we have only one batch containing sequences for all nodes
+        # we have one batch containing sequences for all nodes
         out = self.encoder(input) # TransformerEncoder
+        # assign learned features to nodes
         for node in tree.traverse(strategy="postorder"):
             node.to_parent["encoding"] = out[0][1]
 
@@ -243,8 +244,8 @@ class TransformerEncoderTraversal(TraverseNN):
                 node.to_parent["feature_1"] = feature_1
         # leaf-ward traversal -> skip for now
         # logits = self.up_traverse_stack(x)
-        # feed root feature into transformer encoder
         out = node.to_parent["feature_1"]
+        # linear layer for classification
         logit = self.classifier(out).unsqueeze(1)
         return logit
 
