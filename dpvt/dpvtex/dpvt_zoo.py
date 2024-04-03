@@ -6,6 +6,12 @@ from dpvtex.dpvt_data import train_val_data_of_nicknames
 def create_model(model_name, learning_rate):
     if model_name == "traverseNN":
         model = models.TraverseNN(learning_rate)
+    elif model_name == "traverseMax":
+        model = models.TraverseMax(learning_rate)
+    elif model_name == "traverseMaxSiteSum":
+        model = models.TraverseMaxSiteSum(learning_rate)
+    elif model_name == "traverseSum":
+        model = models.TraverseSum(learning_rate)
     elif model_name == "TransformerEncoderTraversal":
         model = models.TransformerEncoderTraversal(learning_rate)
     return model

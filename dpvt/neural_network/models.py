@@ -113,7 +113,7 @@ class TraverseNN(L.LightningModule):
         """
         encoder_input = self.tree_traversal_mlp(tree)
         encoder_output = self.site_aggregation(encoder_input)
-        logit = self.classifier(encoder_output[0])
+        logit = self.classifier(encoder_output)
         return logit
 
     def tree_traversal_mlp(self, tree: Tree, feature_name="feature_0"):
@@ -165,7 +165,7 @@ class TraverseNN(L.LightningModule):
         using a Transformer
         """
         encoder_input = input_features.unsqueeze(1)  # batch_size = 1
-        out = self.encoder(encoder_input)
+        out = self.encoder(encoder_input)[0]
         return out
 
     def node_aggregate(self, left_data, right_data):
@@ -184,6 +184,54 @@ class TraverseNN(L.LightningModule):
         output = self.up_traverse_stack(torch.cat((left_data, right_data)))
         # output += self.up_traverse_stack(torch.cat((right_data, left_data)))
         return output.unsqueeze(dim=0)
+
+
+class TraverseMax(TraverseNN):
+    """
+    Pytorch module inherited from TraveseNN, which replaces the site aggregation
+    by taking the maximum feature of the output of the MLP for classification
+    (maximum over all site)
+    """
+
+    def site_aggregation(self, input_features):
+        """
+        Takes an encoding of the root sequence of a tree and aggregates its n_sites
+        by choosing the max entry of each feature position over all sites
+        """
+        max_values, _ = torch.max(input_features, dim=0, keepdim=True)
+        return max_values
+
+
+class TraverseMaxSiteSum(TraverseNN):
+    """
+    Pytorch module inherited from TraveseNN, which replaces the site aggregation
+    by taking the feature of the site with maximum sum over feature
+    """
+
+    def site_aggregation(self, input_features):
+        """
+        Takes an encoding of the root sequence of a tree and aggregates its n_sites
+        by choosing the feature of the site with max sum over all features entries
+        """
+        row_sums = input_features.sum(dim=1)
+        _, max_index = torch.max(row_sums, dim=0)
+        max_sum_site = input_features[max_index, :].unsqueeze(0)
+        return max_sum_site
+
+
+class TraverseSum(TraverseNN):
+    """
+    Pytorch module inherited from TraveseNN, which replaces the site aggregation
+    by taking the sum of feature over all sites
+    """
+
+    def site_aggregation(self, input_features):
+        """
+        Takes an encoding of the root sequence of a tree and aggregates its n_sites
+        by choosing the feature of the site with max sum over all features entries
+        """
+        col_sums = input_features.sum(dim=0, keepdim=True)
+        return col_sums
 
 
 class TransformerEncoderTraversal(TraverseNN):
