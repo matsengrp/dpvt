@@ -1,4 +1,4 @@
-from dpvt.scripts.perfect_phylogeny import PerfectPhylogeny
+from dpvt.generate_data.perfect_phylogeny import PerfectPhylogeny
 from ete3 import Tree
 
 
