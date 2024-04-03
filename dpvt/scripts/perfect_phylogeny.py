@@ -313,8 +313,8 @@ class PerfectPhylogeny:
 
     def make_random_tree(
         self,
-        use_seq=False,
-        use_sub=True,
+        use_seq=True,
+        use_sub=False,
         unique_leaves=False,
         sub_on_all_edges=False,
     ):
