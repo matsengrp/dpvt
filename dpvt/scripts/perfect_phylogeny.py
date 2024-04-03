@@ -311,7 +311,9 @@ class PerfectPhylogeny:
             )
         )
 
-    def make_random_tree(
+    ###better name
+
+    def make_random_phylogeny(
         self,
         use_seq=True,
         use_sub=False,
@@ -323,7 +325,7 @@ class PerfectPhylogeny:
         Currently we don't randomize the site permutations.
         """
         return next(
-            self.make_trees(
+            self.make_phylogenies(
                 use_seq=use_seq,
                 use_sub=use_sub,
                 unique_leaves=unique_leaves,
@@ -333,7 +335,7 @@ class PerfectPhylogeny:
             )
         )
 
-    def make_trees(
+    def make_phylogenies(
         self,
         use_seq=True,
         use_sub=False,

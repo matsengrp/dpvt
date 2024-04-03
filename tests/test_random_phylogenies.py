@@ -23,7 +23,7 @@ def check_randomness():
         for all_edges in [False, True]:
             perfect_phylogenies = {
                 newick_sub(phylo): 0
-                for phylo in phylogeny_maker.make_trees(
+                for phylo in phylogeny_maker.make_phylogenies(
                     use_seq=False,
                     use_sub=True,
                     unique_leaves=False,
@@ -33,7 +33,7 @@ def check_randomness():
                 )
             }
             for _ in range(reps):
-                phylo = phylogeny_maker.make_random_tree(
+                phylo = phylogeny_maker.make_random_phylogeny(
                     use_seq=False,
                     use_sub=True,
                     unique_leaves=False,

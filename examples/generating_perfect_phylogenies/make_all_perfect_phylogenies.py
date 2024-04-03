@@ -51,7 +51,7 @@ def run(
                 print(f"Processing topology {i}.")
                 tree = Tree(newick)
                 phylogeny_maker = PerfectPhylogeny(tree)
-                p_phylos = phylogeny_maker.make_trees(
+                p_phylos = phylogeny_maker.make_phylogenies(
                     use_seq, use_sub, unique_leaves, sub_all_edges, min_sites, max_sites
                 )
                 j = -1

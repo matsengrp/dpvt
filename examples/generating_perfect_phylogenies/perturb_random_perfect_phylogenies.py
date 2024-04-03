@@ -29,7 +29,7 @@ def try_it():
             tree.populate(leaf_count, model="uniform")
             tree = Tree(tree.write())
             phylogeny_maker = PerfectPhylogeny(tree)
-            tree = phylogeny_maker.make_random_tree(
+            tree = phylogeny_maker.make_random_phylogeny(
                 use_seq=True,
                 use_sub=False,
                 unique_leaves=False,
