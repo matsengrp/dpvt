@@ -111,8 +111,22 @@ class TraverseNN(L.LightningModule):
                 to_parent["feature_0"] that encodes the mutation between the node and
                 its parent, e.g. A -> G is encoded by [-1, 1, 0, 0]
         """
+        encoder_input = self.tree_traversal_mlp(tree)
+        encoder_output = self.site_aggregation(encoder_input)
+        logit = self.classifier(encoder_output[0])
+        return logit
+
+    def tree_traversal_mlp(self, tree: Tree, feature_name="feature_0"):
+        """
+        Takes an ete3.Tree as input and outputs an encoding of the root sequence
+        Args:
+            tree (ete3 Tree): each node has a torch tensor attribute
+                to_parent["feature_0"] that encodes the mutation between the node and
+                its parent, e.g. A -> G is encoded by [-1, 1, 0, 0]
+            feature_name (string): name of feature assigned to nodes of the tree that
+                are used for encoding
+        """
         n_sites = len(tree.sequence)
-        # tree = tree.copy()
         # root-ward traversal
         for node in tree.traverse(strategy="postorder"):
             if node.is_leaf():
@@ -131,12 +145,10 @@ class TraverseNN(L.LightningModule):
                             f"Input tree must be bifurcating, but node has"
                             "{len(node.children)} children"
                         )
-                    left_feature_0 = child1.to_parent["feature_0"][i]
+                    left_feature_0 = child1.to_parent[feature_name][i]
                     left_feature_1 = child1.to_parent["feature_1"][i]
-                    right_feature_0 = child2.to_parent["feature_0"][i]
+                    right_feature_0 = child2.to_parent[feature_name][i]
                     right_feature_1 = child2.to_parent["feature_1"][i]
-                    # print("right_0:", right_feature_0)
-                    # print("right_1:", right_feature_1)
                     left_data = torch.cat(
                         (left_feature_0, left_feature_1), dim=0
                     )
@@ -145,16 +157,16 @@ class TraverseNN(L.LightningModule):
                     )
                     feature_1[i] = self.node_aggregate(left_data, right_data)
                 node.to_parent["feature_1"] = feature_1
-        # leaf-ward traversal -> skip for now
-        # logits = self.up_traverse_stack(x)
-        # feed root feature into transformer encoder
-        encoder_input = tree.to_parent["feature_1"].unsqueeze(
-            1
-        )  # batch_size = 1
-        # we only take first output -- alternatives: mean, max pooling
-        out = self.encoder(encoder_input)[0]  # dim [batch_size, feature_size]
-        logit = self.classifier(out)
-        return logit
+        return tree.to_parent["feature_1"]
+
+    def site_aggregation(self, input_features):
+        """
+        Takes an encoding of the root sequence of a tree and aggregates its n_sites
+        using a Transformer
+        """
+        encoder_input = input_features.unsqueeze(1)  # batch_size = 1
+        out = self.encoder(encoder_input)
+        return out
 
     def node_aggregate(self, left_data, right_data):
         """
@@ -200,17 +212,28 @@ class TransformerEncoderTraversal(TraverseNN):
                 to_parent["feature_0"] that encodes the mutation between the node and
                 its parent, e.g. A -> G is encoded by [-1, 1, 0, 0]
         """
+        tree = self.site_aggregation(tree)
+        output = self.tree_traversal_mlp(tree)
+        return output
+
+    def site_aggregation(self, tree: Tree):
         # transform input to tensor of correct format for TransformerEncoder
-        input = [node.to_parent["feature_0"] for node in tree.traverse(strategy="postorder")]
+        input = [
+            node.to_parent["feature_0"]
+            for node in tree.traverse(strategy="postorder")
+        ]
         input = torch.stack(input)
-        input = input.transpose(0,1) # swap first two dimensions -> [seq_length, batch_size, d_model]
+        input = input.transpose(
+            0, 1
+        )  # swap first two dimensions -> [seq_length, batch_size, d_model]
         # we have one batch containing sequences for all nodes
-        out = self.encoder(input) # TransformerEncoder
+        out = self.encoder(input)  # TransformerEncoder
         # assign learned features to nodes
         for node in tree.traverse(strategy="postorder"):
             node.to_parent["encoding"] = out[0][1]
+        return tree
 
-        # tree = tree.copy()
+    def tree_traversal_mlp(self, tree: Tree, feature_name="encoding"):
         # root-ward traversal
         for node in tree.traverse(strategy="postorder"):
             if node.is_leaf():
@@ -228,15 +251,11 @@ class TransformerEncoderTraversal(TraverseNN):
                         f"Input tree must be bifurcating, but node has"
                         "{len(node.children)} children"
                     )
-                left_encoding = child1.to_parent["encoding"]
+                left_encoding = child1.to_parent[feature_name]
                 left_feature_1 = child1.to_parent["feature_1"]
-                right_encoding = child2.to_parent["encoding"]
+                right_encoding = child2.to_parent[feature_name]
                 right_feature_1 = child2.to_parent["feature_1"]
-                # print("right_0:", right_encoding)
-                # print("right_1:", right_feature_1)
-                left_data = torch.cat(
-                    (left_encoding, left_feature_1), dim=0
-                )
+                left_data = torch.cat((left_encoding, left_feature_1), dim=0)
                 right_data = torch.cat(
                     (right_encoding, right_feature_1), dim=0
                 )
