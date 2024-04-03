@@ -21,6 +21,7 @@ def perturb_tree(tree, depth, skip_root=True, exception_on_fail=False):
             method returns None in such cases.
     """
     tree = tree.copy()
+    any(node.add_feature("random_tree", False) for node in tree.traverse())
     valid_nodes = [
         node
         for node in tree.traverse(strategy="preorder")
