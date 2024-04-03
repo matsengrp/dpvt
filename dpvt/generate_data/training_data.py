@@ -246,11 +246,6 @@ def create_site4_good_trees(n_trees=SAMPLE_SIZE // 2, seed=None):
         trees.append(tree)
     return trees
 
-site4_good_trees = create_site4_good_trees(seed=seed)
-file_name = f"4site_4leaf_{SAMPLE_SIZE}good_trees_{seed}seed.pickle"
-with open(file_name, "wb") as fh:
-    pickle.dump(site4_good_trees, fh)
-
 def create_site4_bad_trees(n_trees=SAMPLE_SIZE // 2, seed=None):
     """
     generate "bad" trees for training by concatenating 2 "bad" sites with 1 "good" and
@@ -270,6 +265,11 @@ def create_site4_bad_trees(n_trees=SAMPLE_SIZE // 2, seed=None):
         trees.append(tree)
     return trees
     
+site4_good_trees = create_site4_good_trees(seed=seed)
+file_name = f"4site_4leaf_{SAMPLE_SIZE}good_trees_{seed}seed.pickle"
+with open(file_name, "wb") as fh:
+    pickle.dump(site4_good_trees, fh)
+
 site4_bad_trees = create_site4_bad_trees(seed=seed)
 file_name = f"4site_4leaf_{SAMPLE_SIZE}bad_trees_{seed}seed.pickle"
 with open(file_name, "wb") as fh:
