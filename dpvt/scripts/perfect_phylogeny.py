@@ -22,34 +22,32 @@ class PerfectPhylogeny:
     sequences to be unique (currently not supported).
 
     The standard use case is to create an instance of the this class from a given ete3
-    Tree and call make_trees to get a generator perfect phylogenies on the tree, or
-    call make_random_tree to get a single perect phylogeny.
-    """
+    Tree and call make_phylogenies to get a generator for perfect phylogenies on the
+    tree, or call make_random_phylogeny to get a single perect phylogeny.
 
-    """
     Attributes:
         bad_root_patterns (set): The set of tuples of node indices not allowed as
             mutations near the root.
-        cherry_index_pairs (set): The set of pairs of leaf indices (leaf1, leaf2), 
+        cherry_index_pairs (set): The set of pairs of leaf indices (leaf1, leaf2),
             where the two leaves are siblings and leaf1.node_index < leaf2.node_index.
         internal_node_count (int): The number of non-root non-leaf nodes.
         internal_node_indices (set): The set of internal node indices.
         leaf_count (int): The number of leaf nodes in the topology.
         leaf_indices (set): The set of leaf node indices.
-        mutation_internal_node_index_sets (tuple of sets): The entries of 
+        mutation_internal_node_index_sets (tuple of sets): The entries of
             mutation_node_index_sets restricted to internal nodes.
-        mutation_leaf_node_index_sets (tuple of sets): The entries of 
-            mutation_node_index_sets restricted to leaf nodes.     
-        mutation_node_index_sets (tuple of sets): Each inner set gives the indices of 
-            nodes where mutations occur, such that the number of mutations is at most 
-            (state_count - 1). This means the mutations can be chosen to produce a 
+        mutation_leaf_node_index_sets (tuple of sets): The entries of
+            mutation_node_index_sets restricted to leaf nodes.
+        mutation_node_index_sets (tuple of sets): Each inner set gives the indices of
+            nodes where mutations occur, such that the number of mutations is at most
+            (state_count - 1). This means the mutations can be chosen to produce a
             perfect phylogeny.
         node_count (int): The number of nodes in the topology.
         node_indices (set): The set of node indices.
         nodes (tuple of ete3.Trees): Tuple of all nodes of the topology in preorder
-            traversal, with all internal nodes appearing before any leaf nodes. The 
-            node indices used throughout this class are indices into this tuple. Note 
-            the root node always has index 0.                                 
+            traversal, with all internal nodes appearing before any leaf nodes. The
+            node indices used throughout this class are indices into this tuple. Note
+            the root node always has index 0.
         state_count (int): The number of states.
         state_permutations (dict): A dictionary mapping an integer r to the tuple of
             permutations using r elements of self.states. The states are used to convert
@@ -267,9 +265,9 @@ class PerfectPhylogeny:
                     subs.append(f"{parent}{i}{child}")
         return "{" + "_".join(subs) + "}"
 
-    def make_tree(self, label_seq, label_sub, state_tuples_indices, perm_indices):
+    def make_phylogeny(self, label_seq, label_sub, state_tuples_indices, perm_indices):
         """
-        Create a single new tree based on indices into self.state_tuples and
+        Create a single new phylogeny based on indices into self.state_tuples and
         self.state_permutations. The nodes of the tree are optionally labelled with the
         sequence at that node and/or the substitions from the parent node.
         """
@@ -382,7 +380,7 @@ class PerfectPhylogeny:
         )
 
         trees = (
-            self.make_tree(use_seq, use_sub, state_tuples_indices, perm_indices)
+            self.make_phylogeny(use_seq, use_sub, state_tuples_indices, perm_indices)
             for state_tuples_indices in state_tuple_indices_gen
             for perm_indices in prod(
                 *self.perms_for_states(state_tuples_indices, skip_perms)
