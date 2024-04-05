@@ -49,7 +49,7 @@ class MinimalCovers:
 
     Attributes:
         mut_counts (list): A list of integers, where the element at index i is the
-            current number of mutations applied to a node. This list is in the same order
+            current number of mutations applied to node i. This list is in the same order
             as self.node_indices.     
         mut_node_index_sets (tuple of sets): This is either the attribute
             mutation_internal_node_index_sets or mutation_node_index_sets of the input
@@ -58,7 +58,7 @@ class MinimalCovers:
             PerfectPhylogeny.mutation_node_index_sets.
         node_index_to_count_index (dict): A dictionary mapping a node index to its
             associated index in self.mut_counts, which is the positition of the node 
-            index in self.node_indices. By default, the node index n is at positiion n-1.    
+            index in self.node_indices. By default, the node index n is at position n-1.    
             When shuffle_indices is True, the order is random. 
         node_index_to_mutation_set_indices (dict of tuples): A dictionary mapping a node
             index to the tuple of indices into PerfectPhylogeny.mutation_node_index_sets
