@@ -16,11 +16,11 @@ pip install torch_scatter torch_sparse torch_cluster torch_spline_conv -f https:
 ## Training Data
 
 ### Generating Perfect Phylogenies
-A python class for creating perfect phylogenies given a topology is in 
+A python class for creating perfect phylogenies given a tree topology is in 
 `dpvt/scripts/perfect_phylogeny.py`. 
 
-Call the `make_trees` method to generate all perfect phylogenies (with a certain 
-minimality condition) for a topology. Call the `make_random_tree` method for a single 
+Call the `make_phylogenies` method to generate all perfect phylogenies (with a certain 
+minimality condition) for a topology. Call the `make_random_phylogeny` method for a single 
 perfect phylogeny (the distribution currently is not uniform, see 
 `dpvt/tests/test_random_phylogenies.py`).
 
