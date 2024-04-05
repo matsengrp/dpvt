@@ -7,6 +7,11 @@ Deep (neural networks for) Phylogenetics Via Traversals
 mamba env create -f environment.yml
 ```
 
+To install this package locally, clone the repo and in the root folder (with the `setup.py` file) run:
+```bash
+pip install -e .
+```
+
 
 ## Training Workflow
 

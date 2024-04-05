@@ -30,7 +30,7 @@ class TraverseNN(L.LightningModule):
     For now, we only implement the root-ward traversal.
 
     Attributes:
-        up_traverse_stack: NN with single hidden layer, used to summarize mutation data
+        traverse_stack: NN with single hidden layer, used to summarize mutation data
             below a given node at a given site, by combining data from its two children
         encoder_layer:
         encoder: transformer encoder used to summarize mutation data across all sizes,
@@ -42,16 +42,11 @@ class TraverseNN(L.LightningModule):
         super().__init__()
         # learning rate
         self.lr = learning_rate
-        self.up_traverse_stack = nn.Sequential(
+        self.traverse_stack = nn.Sequential(
             nn.Linear(16, 32),
             nn.ReLU(),
             nn.Linear(32, 4),
         )
-        # self.down_traverse_stack = nn.Sequential(
-        #     nn.Linear(16, 32),
-        #     nn.ReLU(),
-        #     nn.Linear(32, 4),
-        # )
         self.encoder_layer = nn.TransformerEncoderLayer(
             d_model=d_model,
             nhead=nhead,
@@ -191,8 +186,8 @@ class TraverseNN(L.LightningModule):
             `(left, right)` and `(right, left)` and add outputs, to apply symmetry
             constraint
         """
-        output = self.up_traverse_stack(torch.cat((left_data, right_data)))
-        # output += self.up_traverse_stack(torch.cat((right_data, left_data)))
+        output = self.traverse_stack(torch.cat((left_data, right_data)))
+        # output += self.traverse_stack(torch.cat((right_data, left_data)))
         return output.unsqueeze(dim=0)
 
     @staticmethod

@@ -11,4 +11,5 @@ def test_nn():
     tree = site4_good_trees[0]
     print(tree.get_ascii(attributes=["sequence", "to_parent"]))
     out = tnn([tree])
-    assert out > 0
+    for x in out:
+        assert x.item() > 0
