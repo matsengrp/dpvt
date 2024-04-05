@@ -111,22 +111,41 @@ class TraverseNN(L.LightningModule):
         Args:
             tree (ete3 Tree): each node has a torch tensor attribute
                 to_parent["feature_0"], of size (n_sites, 4), that encodes the mutation
-                between the node and its parent, e.g. A -> G is encoded by 
+                between the node and its parent, e.g. A -> G is encoded by
                 [..., [-1, 1, 0, 0], ...]
         """
-        n_sites = len(tree.sequence)
-        # tree = tree.copy()
+        encoder_input = self.tree_traversal_mlp(tree, len(tree.sequence))
+        encoder_output = self.site_aggregation(encoder_input)
+        logit = self.classifier(encoder_output[0])
+        return logit
+
+    def tree_traversal_mlp(
+        self,
+        tree: Tree,
+        seq_length,
+        feature_name="feature_0",
+    ):
+        """
+        Takes an ete3.Tree as input and outputs an encoding of the root sequence
+        Args:
+            tree (ete3 Tree): each node has a torch tensor attribute
+                to_parent["feature_0"] that encodes the mutation between the node and
+                its parent, e.g. A -> G is encoded by [-1, 1, 0, 0]
+            seq_length (int): length of input sequences
+            feature_name (string): name of feature assigned to nodes of the tree that
+                are used for encoding
+        """
         # root-ward traversal
         for node in tree.traverse(strategy="postorder"):
             if node.is_leaf():
-                node.to_parent["feature_1"] = torch.zeros((n_sites, 4))
+                node.to_parent["feature_1"] = torch.zeros((seq_length, 4))
             elif len(node.children) == 1:  # node is root with single child
                 assert node.up is None
                 child = node.children[0]
                 node.to_parent["feature_1"] = child.to_parent["feature_1"]
             else:
-                feature_1 = torch.zeros((n_sites, 4))
-                for i in range(n_sites):
+                feature_1 = torch.zeros((seq_length, 4))
+                for i in range(seq_length):
                     try:
                         child1, child2 = node.children
                     except ValueError:
@@ -134,24 +153,24 @@ class TraverseNN(L.LightningModule):
                             f"Input tree must be bifurcating, but node has"
                             "{len(node.children)} children"
                         )
-                    left_feature_0 = child1.to_parent["feature_0"][i]
+                    left_feature_0 = child1.to_parent[feature_name][i]
                     left_feature_1 = child1.to_parent["feature_1"][i]
-                    right_feature_0 = child2.to_parent["feature_0"][i]
+                    right_feature_0 = child2.to_parent[feature_name][i]
                     right_feature_1 = child2.to_parent["feature_1"][i]
-                    # print("right_0:", right_feature_0)
-                    # print("right_1:", right_feature_1)
                     left_data = torch.cat((left_feature_0, left_feature_1), dim=0)
                     right_data = torch.cat((right_feature_0, right_feature_1), dim=0)
                     feature_1[i] = self.node_aggregate(left_data, right_data)
                 node.to_parent["feature_1"] = feature_1
-        # leaf-ward traversal -> skip for now
-        # logits = self.up_traverse_stack(x)
-        # feed root feature into transformer encoder
-        encoder_input = tree.to_parent["feature_1"].unsqueeze(1)  # batch_size = 1
-        # we only take first output -- alternatives: mean, max pooling
-        out = self.encoder(encoder_input)[0]  # dim [batch_size, feature_size]
-        logit = self.classifier(out)
-        return logit
+        return tree.to_parent["feature_1"]
+
+    def site_aggregation(self, input_features):
+        """
+        Takes an encoding of the root sequence of a tree and aggregates its n_sites
+        using a Transformer
+        """
+        encoder_input = input_features.unsqueeze(1)  # batch_size = 1
+        out = self.encoder(encoder_input)
+        return out
 
     def node_aggregate(self, left_data, right_data):
         """
@@ -164,3 +183,51 @@ class TraverseNN(L.LightningModule):
         output = self.up_traverse_stack(torch.cat((left_data, right_data)))
         # output += self.up_traverse_stack(torch.cat((right_data, left_data)))
         return output.unsqueeze(dim=0)
+
+
+class TransformerEncoderTraversal(TraverseNN):
+    """
+    A pytorch module which takes a list of ete3.Trees as input and outputs 0's and 1's
+    to indicate whether each input tree is maximally parsimonious or not, respectively,
+    for the sequences assigned to the leaf nodes.
+
+    The forward function first encodes the mutation features using a transformer encoder
+    and then applies two traversals to the input tree, first root-ward and then leaf-ward
+
+    For now, we only implement the root-ward traversal.
+
+    Attributes:
+        up_traverse_stack
+        final
+    """
+
+    def forward_on_tree(self, tree: Tree):
+        """
+        Takes an ete3.Tree as input and outputs a 0 or 1 to indicate whether the input
+        tree is maximally parsimonious or not, respectively, for the sequences assigned
+        to the leaf nodes.
+        Args:
+            tree (ete3 Tree): each node has a torch tensor attribute
+                to_parent["feature_0"] that encodes the mutation between the node and
+                its parent, e.g. A -> G is encoded by [-1, 1, 0, 0]
+        """
+        tree = self.site_aggregation(tree)
+        output = self.tree_traversal_mlp(tree, 1, feature_name="encoding")
+        logit = self.classifier(output)
+        return logit
+
+    def site_aggregation(self, tree: Tree):
+        # transform input to tensor of correct format for TransformerEncoder
+        input = [
+            node.to_parent["feature_0"] for node in tree.traverse(strategy="postorder")
+        ]
+        input = torch.stack(input)
+        input = input.transpose(
+            0, 1
+        )  # swap first two dimensions -> [seq_length, batch_size, d_model]
+        # we have one batch containing sequences for all nodes
+        out = self.encoder(input)  # TransformerEncoder
+        # assign learned features to
+        for node in tree.traverse(strategy="postorder"):
+            node.to_parent["encoding"] = out[0][1].unsqueeze(0)
+        return tree
