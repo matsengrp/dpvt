@@ -110,7 +110,7 @@ class TraverseNN(L.LightningModule):
         Args:
             tree (ete3 Tree): each node has a torch tensor attribute
                 to_parent["feature_0"], of size (n_sites, 4), that encodes the mutation
-                between the node and its parent, e.g. A -> G is encoded by 
+                between the node and its parent, e.g. A -> G is encoded by
                 [..., [-1, 1, 0, 0], ...]
         """
         n_sites = len(tree.sequence)
@@ -148,9 +148,9 @@ class TraverseNN(L.LightningModule):
             if node.is_root():
                 node.from_parent["feature_1"] = feature_1
             elif node.up.is_root():
-                assert len(node.up.children) == 1, (
-                    "Error: root of tree should have single child"
-                )
+                assert (
+                    len(node.up.children) == 1
+                ), "Error: root of tree should have single child"
                 node.from_parent["feature_1"] = feature_1
             else:
                 parent = node.up
@@ -165,17 +165,21 @@ class TraverseNN(L.LightningModule):
                     feature_1[i] = self.node_aggregate(up_data, side_data)
                 node.from_parent["feature_1"] = feature_1
         # feed node feature into transformer encoder
-        encoder_input = torch.stack([
-            torch.cat((node.to_parent["feature_1"], node.from_parent["feature_1"]))
-            for node in tree.traverse(strategy="preorder")
-        ])  # batch_size = 1
+        encoder_input = torch.stack(
+            [
+                torch.cat((node.to_parent["feature_1"], node.from_parent["feature_1"]))
+                for node in tree.traverse(strategy="preorder")
+            ]
+        )  # batch_size = 1
         # we only take first output -- alternatives: mean, max pooling
         n_nodes = encoder_input.size(dim=0)
-        out = torch.stack([
-            self.encoder(row)[0]  # dim [batch_size, feature_size]
-            for row in encoder_input
-        ])
-        logits = self.classifier(out) # .squeeze()
+        out = torch.stack(
+            [
+                self.encoder(row)[0]  # dim [batch_size, feature_size]
+                for row in encoder_input
+            ]
+        )
+        logits = self.classifier(out)  # .squeeze()
         return logits
 
     def node_aggregate(self, left_data, right_data):

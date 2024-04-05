@@ -24,7 +24,7 @@ def create_training_data(file_path, good_trees, bad_trees):
          |   /-4
           \3|
              \-5
-    """    
+    """
     tree_to_label = {
         **{tree: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] for tree in good_trees},
         **{tree: [0.0, 0.0, 0.0, 1.0, 0.0, 0.0] for tree in bad_trees},
