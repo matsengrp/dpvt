@@ -7,9 +7,14 @@ from dpvt.generate_data.training_data import (
 
 def test_nn():
     tnn = TraverseNN(learning_rate=0.01)
-    # tree = good_trees[0]
+
+    tree = good_trees[0]
+    out = tnn([tree])
+    for x in out:
+        assert x.item() > 0
+
     tree = site4_good_trees[0]
-    print(tree.get_ascii(attributes=["sequence", "to_parent"]))
+    # print(tree.get_ascii(attributes=["sequence", "to_parent"]))
     out = tnn([tree])
     for x in out:
         assert x.item() > 0
