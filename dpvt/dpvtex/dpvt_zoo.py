@@ -25,7 +25,7 @@ def trained_model_path(model_name, data_name):
 
 def train_model(model_name, data_name, final_checkpoint, **wrap_kwargs):
     # hyperparameter
-    learning_rate = 0.005
+    learning_rate = 0.01
     # model parameters
     default_params = {"batch_size": 1024, "epochs": 200}
     # Update default parameters with any provided keyword arguments
