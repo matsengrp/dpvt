@@ -4,14 +4,12 @@ from dpvtex.dpvt_data import train_val_data_of_nicknames
 
 
 def create_model(model_name, learning_rate):
-    if model_name == "traverseNN":
+    if model_name == "TraverseNN":
         model = models.TraverseNN(learning_rate)
-    elif model_name == "traverseMax":
-        model = models.TraverseMax(learning_rate)
-    elif model_name == "traverseMaxSiteSum":
-        model = models.TraverseMaxSiteSum(learning_rate)
-    elif model_name == "traverseSum":
-        model = models.TraverseSum(learning_rate)
+    elif model_name == "TraverseMaxPooling":
+        model = models.TraverseMaxPooling(learning_rate)
+    elif model_name == "TraverseAvgPooling":
+        model = models.TraverseAvgPooling(learning_rate)
     elif model_name == "TransformerEncoderTraversal":
         model = models.TransformerEncoderTraversal(learning_rate)
     return model
@@ -27,7 +25,7 @@ def trained_model_path(model_name, data_name):
 
 def train_model(model_name, data_name, final_checkpoint, **wrap_kwargs):
     # hyperparameter
-    learning_rate = 0.01
+    learning_rate = 0.005
     # model parameters
     default_params = {"batch_size": 1024, "epochs": 200}
     # Update default parameters with any provided keyword arguments

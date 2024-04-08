@@ -185,7 +185,7 @@ class TraverseNN(L.LightningModule):
         return output.unsqueeze(dim=0)
 
 
-class TraverseMax(TraverseNN):
+class TraverseMaxPooling(TraverseNN):
     """
     Pytorch module inherited from TraveseNN, which replaces the site aggregation
     by taking the maximum feature of the output of the MLP for classification
@@ -201,24 +201,7 @@ class TraverseMax(TraverseNN):
         return max_values
 
 
-class TraverseMaxSiteSum(TraverseNN):
-    """
-    Pytorch module inherited from TraveseNN, which replaces the site aggregation
-    by taking the feature of the site with maximum sum over feature
-    """
-
-    def site_aggregation(self, input_features):
-        """
-        Takes an encoding of the root sequence of a tree and aggregates its n_sites
-        by choosing the feature of the site with max sum over all features entries
-        """
-        row_sums = input_features.sum(dim=1)
-        _, max_index = torch.max(row_sums, dim=0)
-        max_sum_site = input_features[max_index, :].unsqueeze(0)
-        return max_sum_site
-
-
-class TraverseSum(TraverseNN):
+class TraverseAvgPooling(TraverseNN):
     """
     Pytorch module inherited from TraveseNN, which replaces the site aggregation
     by taking the sum of feature over all sites
@@ -229,7 +212,7 @@ class TraverseSum(TraverseNN):
         Takes an encoding of the root sequence of a tree and aggregates its n_sites
         by choosing the feature of the site with max sum over all features entries
         """
-        col_sums = input_features.sum(dim=0, keepdim=True)
+        col_sums = input_features.mean(dim=0, keepdim=True)
         return col_sums
 
 

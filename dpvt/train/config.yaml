@@ -1,2 +1,2 @@
-models: ["TransformerEncoderTraversal", "traverseNN", "traverseMax", "traverseMaxSiteSum", "traverseSum"]
+models: ["TransformerEncoderTraversal", "TraverseNN", "TraverseMaxPooling", "TraverseAvgPooling"]
 data: ["FourLeaf", "FourLeafFourSite"]
