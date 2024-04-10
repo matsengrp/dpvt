@@ -20,3 +20,4 @@ dependencies:
   - tensorboard
   - snakemake
   - pytorch-lightning
+  - optuna
