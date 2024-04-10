@@ -72,7 +72,7 @@ class Wrap:
         trainer.save_checkpoint(final_checkpoint)
 
 
-class HyperWrap(Wrap):
+class HyperWrap:
     """
     A class for hyperparameter optimization.
     """
