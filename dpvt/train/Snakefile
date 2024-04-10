@@ -3,7 +3,7 @@ import sys
 snakefile_dir = workflow.basedir
 sys.path.append(snakefile_dir + "/..")
 
-from dpvtex.dpvt_zoo import train_model, trained_model_path
+from dpvtex.dpvt_zoo import train_model, trained_model_path, best_model_params_path, optimize_hyperparameters
 
 config_path = os.path.join(snakefile_dir, "config.yaml")
 configfile: config_path
@@ -15,6 +15,9 @@ data_names = config["data"]
 def trained_model_ckpt(model_name, data_name):
     return f"{trained_model_path(model_name, data_name)}.ckpt"
 
+def best_model_params(model_name, data_name):
+    return f"{best_model_params_path(model_name, data_name)}.json"
+
 
 rule all:
     input:
@@ -24,7 +27,16 @@ rule all:
 
 
 rule train_model:
+    input:
+        best_model_params("{model_name}", "{data_name}")
     output:
         trained_model=trained_model_ckpt("{model_name}", "{data_name}")
     run:
         train_model(wildcards.model_name, wildcards.data_name, output.trained_model)
+
+
+rule hyperparameter_optimization:
+    output:
+        best_model_params=best_model_params("{model_name}", "{data_name}")
+    run:
+        optimize_hyperparameters(wildcards.model_name, wildcards.data_name, output.best_model_params)
