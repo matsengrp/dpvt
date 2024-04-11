@@ -104,19 +104,17 @@ class TraverseNN(L.LightningModule):
 
     def forward_on_tree(self, tree: Tree):
         """
-        Takes an ete3.Tree as input and outputs a 0 or 1 to indicate whether the input
-        tree is maximally parsimonious or not, respectively, for the sequences assigned
-        to the leaf nodes.
+        Takes an ete3.Tree as input and outputs a list of 0's and 1's to indicate
+        whether each edge on the input tree is present in a maximally parsimonious tree
+        or not, respectively, for the sequences assigned to the leaf nodes.
         Args:
-            tree (ete3 Tree): each node has a torch tensor attribute
-                to_parent["feature_0"], of size (n_sites, 4), that encodes the mutation
-                between the node and its parent, e.g. A -> G is encoded by
-                [..., [-1, 1, 0, 0], ...]
+            tree (ete3 Tree): each node has a sequence attribute, which is a string
+                consisting of the characters A, G, C, T
         """
         self.assign_mutation_vectors(tree)
         encoder_input = self.tree_traversal_mlp(tree, len(tree.sequence))
         encoder_output = self.site_aggregation(encoder_input)
-        logit = self.classifier(encoder_output[0])
+        logit = self.classifier(encoder_output[:,0])
         return logit
 
     def tree_traversal_mlp(
@@ -126,7 +124,10 @@ class TraverseNN(L.LightningModule):
         feature_name="feature_0",
     ):
         """
-        Takes an ete3.Tree as input and outputs an encoding of the root sequence
+        Takes an ete3.Tree as input and outputs a tensor of dimension
+        (n_edges, n_sites, 4). At each edge and each site, the tensor encodes a summary
+        of the mutations that occured on the subtree on either side of the specified
+        edge, at the specified site.
         Args:
             tree (ete3 Tree): each node has a torch tensor attribute
                 to_parent["feature_0"] that encodes the mutation between the node and
@@ -153,13 +154,9 @@ class TraverseNN(L.LightningModule):
                         "{len(node.children)} children"
                     )
                 for i in range(seq_length):
-                    left_feature_0 = child1.to_parent[feature_name][i]
-                    left_feature_1 = child1.to_parent["feature_1"][i]
-                    right_feature_0 = child2.to_parent[feature_name][i]
-                    right_feature_1 = child2.to_parent["feature_1"][i]
-                    left_data = torch.cat((left_feature_0, left_feature_1), dim=0)
-                    right_data = torch.cat((right_feature_0, right_feature_1), dim=0)
-                    feature_1[i] = self.node_aggregate(left_data, right_data)
+                    feature_1[i] = self.node_aggregate(
+                        child1.to_parent, child2.to_parent, feature_name, site_idx=i
+                    )
                 node.to_parent["feature_1"] = feature_1
         # leaf-ward traversal
         for node in tree.traverse(strategy="preorder"):
@@ -175,13 +172,9 @@ class TraverseNN(L.LightningModule):
                 parent = node.up
                 sister = node.get_sisters()[0]
                 for i in range(seq_length):
-                    up_feature_0 = parent.from_parent[feature_name][i]
-                    up_feature_1 = parent.from_parent["feature_1"][i]
-                    side_feature_0 = sister.to_parent[feature_name][i]
-                    side_feature_1 = sister.to_parent["feature_1"][i]
-                    up_data = torch.cat((up_feature_0, up_feature_1), dim=0)
-                    side_data = torch.cat((side_feature_0, side_feature_1), dim=0)
-                    feature_1[i] = self.node_aggregate(up_data, side_data)
+                    feature_1[i] = self.node_aggregate(
+                        parent.from_parent, sister.to_parent, feature_name, site_idx=i
+                    )
                 node.from_parent["feature_1"] = feature_1
         return torch.stack(
             [
@@ -192,14 +185,18 @@ class TraverseNN(L.LightningModule):
 
     def site_aggregation(self, input_features):
         """
-        Takes an encoding of the root sequence of a tree and aggregates its n_sites
-        using a Transformer
+        Takes a tensor encoding site-wise mutations on subclades of a tree and
+        aggregates its n_sites using a Transformer
         """
-        encoder_input = input_features.unsqueeze(1)  # batch_size = 1
-        out = self.encoder(encoder_input)
+        out = torch.stack(
+            [
+                self.encoder(row)
+                for row in input_features
+            ]
+        )
         return out
 
-    def node_aggregate(self, left_data, right_data):
+    def node_aggregate(self, first_node_dict, second_node_dict, feature_name, site_idx):
         """
         takes in concatenation of feature vectors from two children of a given node, and
         outputs the `feature_1` vector for that node
@@ -207,62 +204,23 @@ class TraverseNN(L.LightningModule):
             `(left, right)` and `(right, left)` and add outputs, to apply symmetry
             constraint
         """
-        output = self.traverse_stack(torch.cat((left_data, right_data)))
-        # output += self.traverse_stack(torch.cat((right_data, left_data)))
+        i = site_idx
+        first_data = torch.cat(
+            (first_node_dict[feature_name][i], first_node_dict["feature_1"][i]), 
+            dim=0
+        )
+        second_data = torch.cat(
+            (second_node_dict[feature_name][i], second_node_dict["feature_1"][i]),
+            dim=0
+        )
+        output = self.traverse_stack(torch.cat((first_data, second_data)))
+        # output += self.traverse_stack(torch.cat((first_data, second_data)))
         return output.unsqueeze(dim=0)
-
-
-class TransformerEncoderTraversal(TraverseNN):
-    """
-    A pytorch module which takes a list of ete3.Trees as input and outputs 0's and 1's
-    to indicate whether each input tree is maximally parsimonious or not, respectively,
-    for the sequences assigned to the leaf nodes.
-
-    The forward function first encodes the mutation features using a transformer encoder
-    and then applies two traversals to the input tree, first root-ward and then leaf-ward
-
-    For now, we only implement the root-ward traversal.
-
-    Attributes:
-        up_traverse_stack
-        final
-    """
-
-    def forward_on_tree(self, tree: Tree):
-        """
-        Takes an ete3.Tree as input and outputs a 0 or 1 to indicate whether the input
-        tree is maximally parsimonious or not, respectively, for the sequences assigned
-        to the leaf nodes.
-        Args:
-            tree (ete3 Tree): each node has a torch tensor attribute
-                to_parent["feature_0"] that encodes the mutation between the node and
-                its parent, e.g. A -> G is encoded by [-1, 1, 0, 0]
-        """
-        tree = self.site_aggregation(tree)
-        output = self.tree_traversal_mlp(tree, 1, feature_name="encoding")
-        logit = self.classifier(output)
-        return logit
-
-    def site_aggregation(self, tree: Tree):
-        # transform input to tensor of correct format for TransformerEncoder
-        input = [
-            node.to_parent["feature_0"] for node in tree.traverse(strategy="postorder")
-        ]
-        input = torch.stack(input)
-        input = input.transpose(
-            0, 1
-        )  # swap first two dimensions -> [seq_length, batch_size, d_model]
-        # we have one batch containing sequences for all nodes
-        out = self.encoder(input)  # TransformerEncoder
-        # assign learned features to
-        for node in tree.traverse(strategy="postorder"):
-            node.to_parent["encoding"] = out[0][1].unsqueeze(0)
-        return tree
 
     @staticmethod
     def assign_mutation_vectors(tree):
         """
-        modifies input tree by adding a `to_parent` dict attribute, where
+        modifies input tree by adding a `to_parent` and `from_parent` dict attributes.
         `to_parent["feature_0"]` is a m-by-4 torch.tensor which records the mutation
         from the node's parent to the (child) node, e.g., a mutation `A -> T` is encoded
         as [...,[-1, 0, 0, 1],...]
@@ -304,4 +262,54 @@ class TransformerEncoderTraversal(TraverseNN):
                 #     )
                 # except AttributeError:
                 #     node.add_feature("to_parent", {"feature_0": new_row})
+        return None
+
+
+class TransformerEncoderTraversal(TraverseNN):
+    """
+    A pytorch module which takes a list of ete3.Trees as input and outputs 0's and 1's
+    to indicate whether each input tree is maximally parsimonious or not, respectively,
+    for the sequences assigned to the leaf nodes.
+
+    The forward function first encodes the mutation features using a transformer encoder
+    and then applies two traversals to the input tree, first root-ward and then leaf-ward
+
+    For now, we only implement the root-ward traversal.
+
+    Attributes:
+        forward_on_tree
+        site_aggregation
+    """
+
+    def forward_on_tree(self, tree: Tree):
+        """
+        Takes an ete3.Tree as input and outputs a 0 or 1 to indicate whether the input
+        tree is maximally parsimonious or not, respectively, for the sequences assigned
+        to the leaf nodes.
+        Args:
+            tree (ete3 Tree): each node has a torch tensor attribute
+                to_parent["feature_0"] that encodes the mutation between the node and
+                its parent, e.g. A -> G is encoded by [-1, 1, 0, 0]
+        """
+        self.assign_mutation_vectors(tree)
+        self.site_aggregation(tree)
+        output = self.tree_traversal_mlp(tree, seq_length=1, feature_name="encoding")
+        logit = self.classifier(output)
+        return logit
+
+    def site_aggregation(self, tree: Tree):
+        # transform input to tensor of correct format for TransformerEncoder
+        input = [
+            node.to_parent["feature_0"] for node in tree.traverse(strategy="preorder")
+        ]
+        input = torch.stack(input)
+        input = input.transpose(
+            0, 1
+        )  # swap first two dimensions -> [seq_length, batch_size, d_model]
+        # we have one batch containing sequences for all nodes
+        out = self.encoder(input)  # TransformerEncoder
+        # assign learned features to nodes
+        for node in tree.traverse(strategy="preorder"):
+            node.to_parent["encoding"] = out[0][1].unsqueeze(0)
+            node.from_parent["encoding"] = - out[0][1].unsqueeze(0)
         return None
