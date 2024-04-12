@@ -22,6 +22,7 @@ class Wrap:
         self,
         train_data,
         val_data,
+        test_data,
         model,
         log_path,
         batch_size=1024,
@@ -51,25 +52,34 @@ class Wrap:
         self.val_loader = DataLoader(
             val_data, batch_size=self.batch_size, collate_fn=custom_collate
         )
+        self.test_loader = DataLoader(
+            test_data, batch_size=self.batch_size, collate_fn=custom_collate
+        )
 
-    def train(self, final_checkpoint):
-        # use pytorch lightning
         logger = TensorBoardLogger("lightning_logs", name=self.log_path)
-        # checkpoint_callback = ModelCheckpoint(every_n_epochs=10, save_top_k=-1)
+        checkpoint_callback = ModelCheckpoint(every_n_epochs=10, save_top_k=-1)
         early_stop_callback = EarlyStopping(
             monitor="val_loss",  # Metric to monitor
             patience=20,  # Number of epochs with no improvement after which training will be stopped
             mode="min",  # Stop training when the quantity monitored has stopped decreasing
         )
-        trainer = L.Trainer(
+        self.trainer = L.Trainer(
             logger=logger,
             max_epochs=self.epochs,
             log_every_n_steps=1,
-            # callbacks=[checkpoint_callback],
-            callbacks=[early_stop_callback],
+            callbacks=[checkpoint_callback, early_stop_callback],
         )
-        trainer.fit(self.model, self.train_loader, self.val_loader)
-        trainer.save_checkpoint(final_checkpoint)
+
+    def train(self, final_checkpoint):
+        # train and save trained model
+        self.trainer.fit(self.model, self.train_loader, self.val_loader)
+        self.trainer.save_checkpoint(final_checkpoint)
+
+    def test(self, final_checkpoint):
+        # test and save model
+        self.model.eval()
+        self.trainer.test(self.model, self.test_loader)
+        self.trainer.save_checkpoint(final_checkpoint)
 
 
 class HyperWrap:
@@ -115,7 +125,7 @@ class HyperWrap:
             self.val_data, batch_size=batch_size, collate_fn=custom_collate
         )
         logger = TensorBoardLogger(self.checkpoint_dir, name=self.log_path)
-        # checkpoint_callback = ModelCheckpoint(every_n_epochs=10, save_top_k=-1)
+        checkpoint_callback = ModelCheckpoint(every_n_epochs=10, save_top_k=-1)
         early_stop_callback = EarlyStopping(
             monitor="val_loss",  # Metric to monitor
             patience=20,  # Number of epochs with no improvement after which training will be stopped
@@ -124,8 +134,7 @@ class HyperWrap:
         trainer = L.Trainer(
             logger=logger,
             max_epochs=self.epochs,
-            # callbacks=[checkpoint_callback],
-            callbacks=[early_stop_callback],
+            callbacks=[checkpoint_callback, early_stop_callback],
         )
 
         # Train the model

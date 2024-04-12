@@ -23,7 +23,9 @@ def best_model_params_path(model_name, data_name):
     return f"hyper_checkpoints/{trained_model_str(model_name, data_name)}"
 
 
-def train_model(model_name, data_name, final_checkpoint, **wrap_kwargs):
+def train_model(
+    model_name, data_name, final_checkpoint, test_checkpoint, **wrap_kwargs
+):
     # hyperparameters (only used if no hyperparameter testing done)
     default_params = {
         "learning_rate": 0.01,
@@ -32,16 +34,17 @@ def train_model(model_name, data_name, final_checkpoint, **wrap_kwargs):
     }
     # Update default parameters with any provided keyword arguments
     wrap_params = {**default_params, **wrap_kwargs}
-    train_data, val_data = train_val_data_of_nicknames(data_name)
+    train_data, val_data, test_data = train_val_data_of_nicknames(data_name)
     model = create_model(model_name)
     model_str = trained_model_str(model_name, data_name)
-    wrap = Wrap(train_data, val_data, model, model_str, **wrap_params)
+    wrap = Wrap(train_data, val_data, test_data, model, model_str, **wrap_params)
     wrap.train(final_checkpoint)
+    wrap.test(test_checkpoint)
     return model
 
 
 def optimize_hyperparameters(model_name, data_name, best_model_hparams_filepath):
-    train_data, val_data = train_val_data_of_nicknames(data_name)
+    train_data, val_data, _ = train_val_data_of_nicknames(data_name)
     model = create_model(model_name)
     model_str = trained_model_str(model_name, data_name)
     hyper_wrap = HyperWrap(model, train_data, val_data, model_str, 10)

@@ -15,6 +15,9 @@ data_names = config["data"]
 def trained_model_ckpt(model_name, data_name):
     return f"{trained_model_path(model_name, data_name)}.ckpt"
 
+def tested_model_ckpt(model_name, data_name):
+    return f"{trained_model_path(model_name, data_name)}_test.ckpt"
+
 def best_model_params(model_name, data_name):
     return f"{best_model_params_path(model_name, data_name)}.json"
 
@@ -30,9 +33,10 @@ rule train_model:
     input:
         best_model_params("{model_name}", "{data_name}")
     output:
-        trained_model=trained_model_ckpt("{model_name}", "{data_name}")
+        trained_model=trained_model_ckpt("{model_name}", "{data_name}"),
+        test_checkpoint=tested_model_ckpt("{model_name}", "{data_name}")
     run:
-        train_model(wildcards.model_name, wildcards.data_name, output.trained_model)
+        train_model(wildcards.model_name, wildcards.data_name, output.trained_model, output.test_checkpoint)
 
 
 rule hyperparameter_optimization:
