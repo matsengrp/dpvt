@@ -31,12 +31,21 @@ Be careful, there are many perfect phylogenies even for a very small topology.
 ...coming soon...
 
 
+### Data format
+
+We currently assume that training/testing/validation data is pickled as one dictionary with keys being trees and values determining whether the tree is a MP tree (label `0`) or not (label `1`).
+Our training/validation/testing data split is 0.6/0.2/0.2 and when splitting the data we ensure that we get balanced training, validation, and testing set.
+
+
 ## Neural network model
+
+
+### TraverseNN
 
 We define a Pytorch module `TraverseNN` which evaluates whether edges in a given labeled tree appear in a maximum parsimony tree, for the given sequences on the leaf nodes.
 This module is defined in `dpvt/traverse_nn.py`.
 
-The module works as follows:
+The module first performs a tree traversal:
 
 1. We assume the input tree has a `sequence` attribute on each node. 
 For each node, the mutations between the node's sequence and its parent's sequence are encoded as a `torch.tensor` and stored as the attribute `node.to_parent["feature_0"]`
@@ -50,12 +59,22 @@ Negative values means the edge is in a maximum parsimony tree, while positive va
 
 [Current implementation does not do steps 3 and 4, for simplicity]
 
+After the tree traversal we us a transformer encoder in `site_aggregation()` to aggregate the per-site information we learned from the tree traversal into a single value for classifying whether an edge is in a MP tree or not.
+
+[At the current stage, we only make predictions to determine whether the tree is a MP tree or not]
+
+
+### TransformerEncoderTraversal
+
+This Pytorch module inherits from `TraverseNN` and changes the order of the steps described for this module to first aggregate per-site information at every node of a tree and then use the learned features for the tree traversal.
+
 
 ## Logging training
 
 To train the model, run `snakemake --cores 1` in the directory `dpvt/train`.
 
 To view training logs, run `tensorboard --logdir .` and direct your browser to `http://localhost:6006/`.
+The tensorboard additionally shows ROC curves for the performance of classification on the test set.
 
 
 ## File structure of this repo
@@ -63,4 +82,4 @@ To view training logs, run `tensorboard --logdir .` and direct your browser to `
 - `train`: contains `Snakefile` and `config.yaml`, in which models and datasets for training are specified.
 - `neural_network`: contains `models.py`, in which models are defined, and `wrapper.py`, containing wrappers for these models.
 - `dpvtex`: contains `dpvt_data.py`, which implements functions to get datasets for a given nickname and `dpvt_zoo.py`, which creates models for a given nickname. These nicknames are provided to the `Snakefile` in `config.yaml`.
-- `generate_data.py` contains files for generating training and validation data. The data should be saved in data. Data generation is independent of the workflow in `Snakefile`.
+- `generate_data.py`: contains files for generating training and validation data. The data should be saved in data. Data generation is independent of the workflow in `Snakefile`.
