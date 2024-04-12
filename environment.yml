@@ -21,3 +21,4 @@ dependencies:
   - snakemake
   - pytorch-lightning
   - optuna
+  - scikit-learn
