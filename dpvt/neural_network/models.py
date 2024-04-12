@@ -101,6 +101,10 @@ class TraverseNN(L.LightningModule):
         return {}
 
     def on_test_epoch_end(self):
+        """
+        Summarize testing statistics (AUROC and ROC) at end of testing and adds them to logging.
+        The ROC curve is added as figure to self.logger.
+        """
         probs = torch.cat(self.test_probs, dim=0)
         targets = torch.cat(self.test_targets, dim=0)
 

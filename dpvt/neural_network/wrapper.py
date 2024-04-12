@@ -33,6 +33,7 @@ class Wrap:
         self.log_path = log_path
         self.epochs = epochs
 
+        # If hyperparameter tuning has been done, read hyperparameters and use them from training
         if hyperparameter_path:
             print("Using best hyperparameters for ", log_path)
             with open(hyperparameter_path) as f:
@@ -58,8 +59,9 @@ class Wrap:
 
         logger = TensorBoardLogger("lightning_logs", name=self.log_path)
         checkpoint_callback = ModelCheckpoint(every_n_epochs=10, save_top_k=-1)
+        # early stopping if overfitting occurs
         early_stop_callback = EarlyStopping(
-            monitor="val_loss",  # Metric to monitor
+            monitor="val_loss",
             patience=20,  # Number of epochs with no improvement after which training will be stopped
             mode="min",  # Stop training when the quantity monitored has stopped decreasing
         )
@@ -147,6 +149,11 @@ class HyperWrap:
         self,
         hyperparams_filename,
     ):
+        """
+        Function to perform hyperparameter optimization
+        Args:
+            hyperparams_filename: json file in which to store best hyperparameters
+        """
         study = optuna.create_study(direction="minimize")
         study.optimize(self.objective, self.n_trials)
 
