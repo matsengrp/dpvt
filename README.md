@@ -15,6 +15,14 @@ We have a workflow implemented in Snakemake (`Snakefile`), which takes as input 
 To execute the workflow `snakemake -c[num_cores]`, where `[num_cores]` should be replaced with the number of cores you want to use.
 
 
+### Hyperparameter Optimization
+
+By default, running the workflow with Snakemake will perform hyperparameter tuning with optuna for all models and datasets.
+All models tested are saved in `hyper_checkpoints/`, which also contains `json` files with the best hyperparameters.
+These are then used for model training.
+If the files with best hyperparameters exist already for a given model and dataset, running the workflow will skip hyperparameter tuning.
+
+
 ## Training Data
 
 ### Generating Perfect Phylogenies (not yet tested for correctness or completeness)
