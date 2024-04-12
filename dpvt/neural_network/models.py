@@ -74,8 +74,8 @@ class TraverseNN(L.LightningModule):
 
     def training_step(self, train_batch, batch_idx):
         xb, yb = train_batch
-        pred = torch.cat([self.forward_on_tree(item) for item in xb])
-        loss = F.binary_cross_entropy_with_logits(pred, yb.unsqueeze(1))
+        pred = self(xb)
+        loss = F.binary_cross_entropy(pred, yb.unsqueeze(1))
         self.log("train_loss", loss, batch_size=len(xb), on_epoch=True)
         # log predictions on positive- and negative-datapoints, and show data in console
         # progress bar
@@ -88,17 +88,16 @@ class TraverseNN(L.LightningModule):
 
     def validation_step(self, val_batch, batch_idx):
         xb, yb = val_batch
-        pred = torch.cat([self.forward_on_tree(item) for item in xb])
-        loss = F.binary_cross_entropy_with_logits(pred, yb.unsqueeze(1))
+        pred = self(xb)
+        loss = F.binary_cross_entropy(pred, yb.unsqueeze(1))
         self.log("val_loss", loss, batch_size=len(xb))
 
     def test_step(self, test_batch):
         xb, yb = test_batch
         y_pred = self(xb)
-        probabilities = F.sigmoid(y_pred)
-        self.test_probs.append(probabilities)
+        self.test_probs.append(y_pred)
         self.test_targets.append(yb.unsqueeze(1).int())
-        self.auroc_metric(probabilities, yb.unsqueeze(1).int())
+        self.auroc_metric(y_pred, yb.unsqueeze(1).int())
         return {}
 
     def on_test_epoch_end(self):
