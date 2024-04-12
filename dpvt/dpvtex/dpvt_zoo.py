@@ -47,6 +47,8 @@ def optimize_hyperparameters(model_name, data_name, best_model_hparams_filepath)
     train_data, val_data, _ = train_val_data_of_nicknames(data_name)
     model = create_model(model_name)
     model_str = trained_model_str(model_name, data_name)
-    hyper_wrap = HyperWrap(model, train_data, val_data, model_str, 10)
+    hyper_wrap = HyperWrap(
+        model, train_data, val_data, model_str, n_trials=10
+    )  # n_trials chosen small for testing
     hyper_wrap.optuna_optimize(best_model_hparams_filepath)
     return model
