@@ -95,10 +95,9 @@ class TraverseNN(L.LightningModule):
     def test_step(self, test_batch):
         xb, yb = test_batch
         y_pred = self(xb)
-        probabilities = F.sigmoid(y_pred)
-        self.test_probs.append(probabilities)
+        self.test_probs.append(y_pred.detach())
         self.test_targets.append(yb.unsqueeze(1).int())
-        self.auroc_metric(probabilities, yb.unsqueeze(1).int())
+        self.auroc_metric(y_pred, yb.unsqueeze(1).int())
         return {}
 
     def on_test_epoch_end(self):
