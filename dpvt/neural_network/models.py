@@ -20,22 +20,26 @@ learning_rate = 0.01
 
 class TraverseNN(L.LightningModule):
     """
-    A pytorch module which takes a list of ete3.Trees as input and outputs 0's and 1's
-    to indicate whether each input tree is maximally parsimonious or not, respectively,
-    for the sequences assigned to the leaf nodes.
+    A pytorch module which takes a list of ete3.Trees as input and outputs a list of
+    vectors of 0's and 1's to indicate whether each edge of each input tree is maximally
+    parsimonious or not, respectively, for the sequences assigned to the leaf nodes.
 
     The forward function applies two traversals to the input tree, first root-ward and
-    then leaf-ward.
-
-    For now, we only implement the root-ward traversal.
+    then leaf-ward. The traversals combine data across the tree for each site, keeping
+    data from separate sites separate. Then, a transformer encoder is used to combine
+    data across separate sites, at each node. The transformer encoder outputs (n_sites)-
+    many vectors but we only keep the data in the first vector. Finally, this encoder
+    output vector is passed through a linear classifier and a sigmoid to get a
+    prediction.
 
     Attributes:
-        traverse_stack: NN with single hidden layer, used to summarize mutation data
+        traverse_stack: MLP with single hidden layer, used to summarize mutation data
             below a given node at a given site, by combining data from its two children
         encoder_layer:
         encoder: transformer encoder used to summarize mutation data across all sizes,
             at a given node
-        classifier:
+        classifier: linear layer to produce prediction logit, for whether each edge is
+            present in a maximum parsimony tree
     """
 
     def __init__(self, learning_rate=0.01):
@@ -319,13 +323,12 @@ class TransformerEncoderTraversal(TraverseNN):
         return logit
 
     def site_aggregation(self, tree: Tree):
-        # transform input to tensor of correct format for TransformerEncoder
-        # assign learned features to nodes
         for node in tree.traverse(strategy="preorder"):
             input = node.to_parent["feature_0"]
             # input dim = (n_sites, 4)
             output = self.encoder(input)
             # output dim = (n_sites, 4)
-            node.to_parent["encoding"] = output  # [0].unsqueeze(0)
-            node.from_parent["encoding"] = -output  # [0].unsqueeze(0)
+            # assign learned features to nodes
+            node.to_parent["encoding"] = output
+            node.from_parent["encoding"] = -output
         return None
