@@ -4,18 +4,18 @@ import torch.nn.functional as F
 import lightning as L
 from ete3 import Tree
 
-# transformer parameters
-nhead = 2
-d_model = (
-    4  # size of embedding that we feed into transformer, i.e. length of mutation vector
-)
-dim_feedforward = 8
-layer_count = 4
-learning_rate = 0.01
-
 # DNA states
 STATES = ["A", "G", "C", "T"]
 STATE_TO_IDX = {"A": 0, "G": 1, "C": 2, "T": 3}
+n_states = len(STATES)
+
+# transformer parameters
+nhead = 2
+d_model = 2 * n_states  # size of embedding that we feed into transformer, i.e.
+# 2 * (length of mutation vector), from concatenating in two directions across edge
+dim_feedforward = 8
+layer_count = 4
+learning_rate = 0.01
 
 
 class TraverseNN(L.LightningModule):
@@ -43,9 +43,9 @@ class TraverseNN(L.LightningModule):
         # learning rate
         self.lr = learning_rate
         self.traverse_stack = nn.Sequential(
-            nn.Linear(16, 32),
+            nn.Linear(2 * n_states + d_model, 32),
             nn.ReLU(),
-            nn.Linear(32, 4),
+            nn.Linear(32, d_model // 2),
         )
         self.encoder_layer = nn.TransformerEncoderLayer(
             d_model=d_model,
@@ -112,9 +112,10 @@ class TraverseNN(L.LightningModule):
                 consisting of the characters A, G, C, T
         """
         self.assign_mutation_vectors(tree)
-        encoder_input = self.tree_traversal_mlp(tree, len(tree.sequence))
-        encoder_output = self.site_aggregation(encoder_input)
-        logit = self.classifier(encoder_output[:,0])
+        self.tree_traversal_mlp(tree, len(tree.sequence))
+        encoder_output = self.site_aggregation(tree)
+        # encoder_output dim = (n_nodes, 1, 8)
+        logit = self.classifier(encoder_output[:, 0])
         return logit
 
     def tree_traversal_mlp(
@@ -176,29 +177,36 @@ class TraverseNN(L.LightningModule):
                         parent.from_parent, sister.to_parent, feature_name, site_idx=i
                     )
                 node.from_parent["feature_1"] = feature_1
-        return torch.stack(
-            [
-                torch.cat((node.to_parent["feature_1"], node.from_parent["feature_1"]))
-                for node in tree.traverse(strategy="preorder")
-            ]
-        )  # batch_size = 1
+        return tree
 
-    def site_aggregation(self, input_features):
+    def site_aggregation(self, tree):
         """
         Takes a tensor encoding site-wise mutations on subclades of a tree and
         aggregates its n_sites using a Transformer
         """
-        out = torch.stack(
+        input_features = torch.stack(
             [
-                self.encoder(row)
-                for row in input_features
+                torch.cat(
+                    (node.to_parent["feature_1"], node.from_parent["feature_1"]), dim=1
+                )
+                for node in tree.traverse(strategy="preorder")
             ]
-        )
+        )  # batch_size = 1
+        # input_features dim = (n_nodes, 2, 4)
+        out = torch.stack([self.encoder(row) for row in input_features])
+        # out dim = (n_nodes, 2, 4)
         return out
 
-    def node_aggregate(self, first_node_dict, second_node_dict, feature_name, site_idx):
+    def node_aggregate(
+        self,
+        first_node_dict,
+        second_node_dict,
+        feature_name,
+        site_idx,
+        symmetrize=False,
+    ):
         """
-        takes in concatenation of feature vectors from two children of a given node, and
+        takes in dictonaries of feature vectors from two children of a given node, and
         outputs the `feature_1` vector for that node
         previous version: pass concatentation of feature vectors in both orders,
             `(left, right)` and `(right, left)` and add outputs, to apply symmetry
@@ -206,16 +214,16 @@ class TraverseNN(L.LightningModule):
         """
         i = site_idx
         first_data = torch.cat(
-            (first_node_dict[feature_name][i], first_node_dict["feature_1"][i]), 
-            dim=0
+            (first_node_dict[feature_name][i], first_node_dict["feature_1"][i]), dim=0
         )
         second_data = torch.cat(
-            (second_node_dict[feature_name][i], second_node_dict["feature_1"][i]),
-            dim=0
+            (second_node_dict[feature_name][i], second_node_dict["feature_1"][i]), dim=0
         )
-        output = self.traverse_stack(torch.cat((first_data, second_data)))
-        # output += self.traverse_stack(torch.cat((first_data, second_data)))
-        return output.unsqueeze(dim=0)
+        combined_data = torch.cat((first_data, second_data))
+        output = self.traverse_stack(combined_data)
+        if symmetrize:
+            output += self.traverse_stack(torch.cat((first_data, second_data)))
+        return output  # output.unsqueeze(dim=0)
 
     @staticmethod
     def assign_mutation_vectors(tree):
@@ -256,12 +264,6 @@ class TraverseNN(L.LightningModule):
                     node.from_parent["feature_0"] = torch.cat(
                         (node.from_parent["feature_0"], -new_row)
                     )
-                # try:
-                #     node.to_parent["feature_0"] = torch.cat(
-                #         (node.to_parent["feature_0"], new_row)
-                #     )
-                # except AttributeError:
-                #     node.add_feature("to_parent", {"feature_0": new_row})
         return None
 
 
@@ -281,6 +283,16 @@ class TransformerEncoderTraversal(TraverseNN):
         site_aggregation
     """
 
+    def __init__(self, learning_rate=0.01):
+        super().__init__(learning_rate=learning_rate)
+        self.encoder_layer = nn.TransformerEncoderLayer(
+            d_model=n_states,
+            nhead=nhead,
+            dim_feedforward=dim_feedforward,
+        )
+        self.encoder = nn.TransformerEncoder(self.encoder_layer, layer_count)
+        self.classifier = nn.Linear(2 * n_states, 1)
+
     def forward_on_tree(self, tree: Tree):
         """
         Takes an ete3.Tree as input and outputs a 0 or 1 to indicate whether the input
@@ -293,23 +305,27 @@ class TransformerEncoderTraversal(TraverseNN):
         """
         self.assign_mutation_vectors(tree)
         self.site_aggregation(tree)
-        output = self.tree_traversal_mlp(tree, seq_length=1, feature_name="encoding")
+        self.tree_traversal_mlp(tree, seq_length=1, feature_name="encoding")
+        output = torch.stack(
+            [
+                torch.cat(
+                    (node.to_parent["feature_1"], node.from_parent["feature_1"]), dim=1
+                ).squeeze()
+                for node in tree.traverse(strategy="preorder")
+            ]
+        )
+        # output dim = (n_nodes, 8)
         logit = self.classifier(output)
         return logit
 
     def site_aggregation(self, tree: Tree):
         # transform input to tensor of correct format for TransformerEncoder
-        input = [
-            node.to_parent["feature_0"] for node in tree.traverse(strategy="preorder")
-        ]
-        input = torch.stack(input)
-        input = input.transpose(
-            0, 1
-        )  # swap first two dimensions -> [seq_length, batch_size, d_model]
-        # we have one batch containing sequences for all nodes
-        out = self.encoder(input)  # TransformerEncoder
         # assign learned features to nodes
         for node in tree.traverse(strategy="preorder"):
-            node.to_parent["encoding"] = out[0][1].unsqueeze(0)
-            node.from_parent["encoding"] = - out[0][1].unsqueeze(0)
+            input = node.to_parent["feature_0"]
+            # input dim = (n_sites, 4)
+            output = self.encoder(input)
+            # output dim = (n_sites, 4)
+            node.to_parent["encoding"] = output  # [0].unsqueeze(0)
+            node.from_parent["encoding"] = -output  # [0].unsqueeze(0)
         return None
