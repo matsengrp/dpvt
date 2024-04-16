@@ -1,16 +1,15 @@
-from ete3 import Tree
-from ete4 import Tree as ete4Tree
+from dpvt.scripts.utils import Tree
+# from ete4 import Tree as ete4Tree
 from random import randrange
 from historydag.parsimony import disambiguate, parsimony_score
-
 
 def perturb_tree(tree, depth, skip_root=True, exception_on_fail=False):
     """
     Returns a new ete3 Tree instance built from the input tree with a subtree of the
-    specified depth replaced with a random tree. The subtree is selected uniformly from
-    the subtrees of required depth that consist of an internal node as the root and
-    all nodes below this root to the specified depth. Leaf nodes of this subtree are
-    unaltered.
+    specified depth replaced with a random tree, where "depth" means distance to
+    farthest leaf. The subtree is selected uniformly from the subtrees of required depth
+    that consist of an internal node as the root and all nodes below this root to the
+    specified depth. Leaf nodes of this subtree are unaltered.
 
     Parameters:
         tree (ete3.Tree): The input tree.
@@ -53,7 +52,7 @@ def perturb_tree(tree, depth, skip_root=True, exception_on_fail=False):
 def tree_depth(node):
     """
     Returns the depth of the tree with the given node as the root. This depth is the
-    number of nodes below the given node, along the longest path to a leaf ndoe.
+    number of nodes along the longest path from the given node to a leaf ndoe.
     """
     return node.get_farthest_leaf(topology_only=True)[1] + 1
 
@@ -83,13 +82,14 @@ def make_random_tree(tip_subtrees):
     are marked with the node attribute random_tree=True.
     """
     leaf_count = len(tip_subtrees)
-    tree = ete4Tree()
+    tree = Tree()
     tree.populate(leaf_count, model="uniform")
     tree = Tree(tree.write())
     for old_leaf, new_leaf in zip(tree.get_leaves(), tip_subtrees):
         old_leaf.up.add_child(new_leaf)
         old_leaf.delete(prevent_nondicotomic=False)
     any(node.add_feature("random_tree", True) for node in tree.get_descendants())
+    tree.add_feature("random_tree", False)
     return tree
 
 
@@ -132,3 +132,4 @@ def make_worse_tree(tree, depth, max_attempts=100):
         if parsimony_score(perturbed_tree) > old_score:
             return perturbed_tree
     return None
+
