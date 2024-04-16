@@ -313,7 +313,9 @@ class TransformerEncoderTraversal(TraverseNN):
         """
         self.assign_mutation_vectors(tree)
         self.site_aggregation(tree)
-        self.tree_traversal_mlp(tree, seq_length=1, feature_name="encoding")
+        self.tree_traversal_mlp(
+            tree, seq_length=1, feature_name="all_sites_edge_mutation"
+        )
         output = torch.stack(
             [
                 torch.cat(
@@ -337,6 +339,6 @@ class TransformerEncoderTraversal(TraverseNN):
             output = self.encoder(input)
             # output dim = (n_sites, 4)
             # assign learned features to nodes
-            node.to_parent["encoding"] = output
-            node.from_parent["encoding"] = -output
+            node.to_parent["all_sites_edge_mutation"] = output
+            node.from_parent["all_sites_edge_mutation"] = -output
         return None
