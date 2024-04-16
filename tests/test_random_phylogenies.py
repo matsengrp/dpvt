@@ -1,5 +1,6 @@
-from ete3 import Tree
-from ete4 import Tree as ete4Tree
+# from ete3 import Tree
+# from ete4 import Tree as ete4Tree
+from dpvt.scripts.perturb_phylogeny import Tree
 from dpvt.scripts.perfect_phylogeny import PerfectPhylogeny
 from dpvt.scripts.utils import newick_sub
 import time
@@ -16,7 +17,7 @@ def check_randomness():
     # We can't go much further with the leaf count, because the number of perfect
     # phylogenies blows up so fast.
     for leaf_count in range(3, 6):
-        tree = ete4Tree()
+        tree = Tree()
         tree.populate(leaf_count, model="uniform")
         tree = Tree(tree.write())
         phylogeny_maker = PerfectPhylogeny(tree)
@@ -78,7 +79,7 @@ def check_runtime():
 
         runtime = -time.time()
         for _ in range(reps):
-            tree = ete4Tree()
+            tree = Tree()
             tree.populate(leaf_count, model="uniform")
             tree = Tree(tree.write())
             trees.append(tree)
@@ -94,7 +95,7 @@ def check_runtime():
 
         runtime = -time.time()
         for phylogeny_maker in p_phylo_makers:
-            p_phylo = phylogeny_maker.make_random_tree(
+            p_phylo = phylogeny_maker.make_random_phylogeny(
                 use_seq=True,
                 use_sub=False,
                 unique_leaves=False,
@@ -105,7 +106,7 @@ def check_runtime():
 
         runtime = -time.time()
         for phylogeny_maker in p_phylo_makers:
-            p_phylo = phylogeny_maker.make_random_tree(
+            p_phylo = phylogeny_maker.make_random_phylogeny(
                 use_seq=True,
                 use_sub=False,
                 unique_leaves=False,
