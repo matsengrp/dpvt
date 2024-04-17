@@ -389,11 +389,11 @@ class PerfectPhylogeny:
         return trees
 
     @staticmethod
-    def print_columns(tree):
+    def print_alignment(tree):
         """Prints the columns of the sequence alignment for all nodes in the tree."""
         if not hasattr(tree, "sequence"):
             raise ValueError("The input tree does not have the sequence attribute.")
         cols = list(zip(*(n.sequence for n in tree.traverse(strategy="preorder"))))
         for i, c in enumerate(cols):
-            print(f"column {i}: {c}")
+            print(f"site {i}: {c}")
         return None
