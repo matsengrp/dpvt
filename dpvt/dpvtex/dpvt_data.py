@@ -3,6 +3,7 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import (
     Dataset,
 )
+import numpy as np
 from pathlib import Path
 
 # Get the absolute path to the directory where the current script is located
@@ -41,14 +42,19 @@ def train_val_data_of_nicknames(data_name):
     labels = list(data_dict.values())
     trees = list(data_dict.keys())
 
-    train_val_data, test_data, train_val_labels, test_labels = train_test_split(
-        trees, labels, test_size=test_size, stratify=labels
+    labels_array = np.array(labels)
+    sum_of_ones = np.sum(labels, axis=1)
+
+    train_val_data, test_data, train_val_labels, test_labels, sum_train_val, _ = (
+        train_test_split(
+            trees, labels, sum_of_ones, test_size=test_size, stratify=sum_of_ones
+        )
     )
     train_data, val_data, train_labels, val_labels = train_test_split(
         train_val_data,
         train_val_labels,
         test_size=val_size / (train_size + val_size),
-        stratify=train_val_labels,
+        stratify=sum_train_val,
     )
 
     train_data = TreeDataset(train_data, train_labels)

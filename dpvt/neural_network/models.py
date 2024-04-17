@@ -99,8 +99,8 @@ class TraverseNN(L.LightningModule):
         xb, yb = test_batch
         y_pred = self(xb)
         self.test_probs.append(y_pred.detach())
-        self.test_targets.append(yb.unsqueeze(1).int())
-        self.auroc_metric(y_pred, yb.unsqueeze(1).int())
+        self.test_targets.append(yb.unsqueeze(2).int())
+        self.auroc_metric(y_pred, yb.unsqueeze(2).int())
         return {}
 
     def on_test_epoch_end(self):
@@ -151,7 +151,7 @@ class TraverseNN(L.LightningModule):
                 logit = self.forward_on_tree(input)
                 return F.sigmoid(logit)
         # assume input is a list (or iterable) of trees
-        logits = torch.cat([self.forward_on_tree(item) for item in input])
+        logits = torch.stack([self.forward_on_tree(item) for item in input])
         return F.sigmoid(logits)
 
     def forward_on_tree(self, tree: Tree):
@@ -167,7 +167,7 @@ class TraverseNN(L.LightningModule):
         self.tree_traversal_mlp(tree, len(tree.sequence))
         encoder_output = self.site_aggregation(tree)
         # encoder_output dim = (n_nodes, 1, 8)
-        logit = self.classifier(encoder_output[:, 0])
+        logit = self.classifier(encoder_output[:, 0, :])
         return logit
 
     def tree_traversal_mlp(
