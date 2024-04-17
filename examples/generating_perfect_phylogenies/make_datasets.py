@@ -1,7 +1,8 @@
 import pickle
 import torch
+from ete3 import Tree
 
-from dpvt.scripts.utils import Tree
+from dpvt.scripts.utils import Tree as MyTree
 from dpvt.scripts.perfect_phylogeny import PerfectPhylogeny
 from dpvt.scripts.perturb_phylogeny import (
     perturb_tree,
@@ -16,7 +17,7 @@ def create_training_data(file_path, n_trees, n_leaves):
     n_phylos_per_tree = 32
     tree_data_dict = {}
     for _ in range(n_trees):
-        tree = Tree()
+        tree = MyTree()
         tree.populate(n_leaves, model="uniform")
         # debug
         # print(tree)
@@ -25,6 +26,14 @@ def create_training_data(file_path, n_trees, n_leaves):
             phylo = pp.make_random_phylogeny()
             mixed_phylo = perturb_tree(phylo, depth=3)
             sankoff_for_missing_sequences(mixed_phylo)
+            # convert custom Tree object to ete3 Tree
+            newick = mixed_phylo.write(
+                features=["sequence", "random_tree"], 
+                format_root_node=True
+            )
+            # debug
+            # print(newick)
+            mixed_phylo = Tree(newick)
             # add "extra" unifurcating root above previous root
             new_tree = Tree()
             new_tree.add_child(mixed_phylo)
@@ -57,7 +66,7 @@ def create_training_data(file_path, n_trees, n_leaves):
         pickle.dump(data_dict, file=fh)
 
 def main():
-    create_training_data(file_path="test.p", n_trees=32, n_leaves=10)
+    create_training_data(file_path="10leaf_perfect.p", n_trees=32, n_leaves=10)
 
 if __name__ == "__main__":
     main()
