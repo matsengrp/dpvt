@@ -19,8 +19,6 @@ def create_training_data(file_path, n_trees, n_leaves):
     for _ in range(n_trees):
         tree = MyTree()
         tree.populate(n_leaves, model="uniform")
-        # debug
-        # print(tree)
         pp = PerfectPhylogeny(tree)
         for _ in range(n_phylos_per_tree):
             phylo = pp.make_random_phylogeny()
@@ -31,8 +29,6 @@ def create_training_data(file_path, n_trees, n_leaves):
                 features=["sequence", "random_tree"], 
                 format_root_node=True
             )
-            # debug
-            # print(newick)
             mixed_phylo = Tree(newick)
             # add "extra" unifurcating root above previous root
             new_tree = Tree()
@@ -40,14 +36,10 @@ def create_training_data(file_path, n_trees, n_leaves):
             new_tree.sequence = mixed_phylo.sequence
             new_tree.random_tree = mixed_phylo.random_tree
             mixed_phylo = new_tree
-            # debug
-            # print(mixed_phylo.get_ascii(attributes=["sequence", "random_tree"]))
             edge_classifier = [
                 1.0 if (node.random_tree and not node.is_leaf()) else 0.0
                 for node in mixed_phylo.traverse(strategy="preorder")
             ]
-            # debug 
-            # print(edge_classifier)
             tree_data_dict[mixed_phylo] = edge_classifier
     # shuffle keys and make train / validation split 
     num_items = n_trees * n_phylos_per_tree
