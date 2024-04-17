@@ -198,9 +198,12 @@ class TraverseNN(L.LightningModule):
                 for node in tree.traverse(strategy="preorder")
             ]
         )  # batch_size = 1
-        # input_features dim = (n_nodes, 2, 4)
+        # input_features dim = (n_nodes, n_sites, 8)
+        ## debug
+        print("input:", input_features)
+        print("input dim:", input_features.size())
         out = self.encoder(input_features)
-        # out dim = (n_nodes, 2, 4)
+        # out dim = (n_nodes, n_sites, 8)
         return out
 
     def node_aggregate(
