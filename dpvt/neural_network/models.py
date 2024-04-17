@@ -129,7 +129,7 @@ class TraverseNN(L.LightningModule):
         """
         Takes an ete3.Tree as input and outputs a tensor of dimension
         (n_edges, n_sites, 4). At each edge and each site, the tensor encodes a summary
-        of the mutations that occured on the subtree on either side of the specified
+        of the mutations that occurred on the subtree on either side of the specified
         edge, at the specified site.
         Args:
             tree (ete3 Tree): each node has a torch tensor attribute
@@ -199,7 +199,7 @@ class TraverseNN(L.LightningModule):
             ]
         )  # batch_size = 1
         # input_features dim = (n_nodes, 2, 4)
-        out = torch.stack([self.encoder(row) for row in input_features])
+        out = self.encoder(input_features)
         # out dim = (n_nodes, 2, 4)
         return out
 
@@ -212,9 +212,9 @@ class TraverseNN(L.LightningModule):
         symmetrize=False,
     ):
         """
-        takes in dictonaries of feature vectors from two children of a given node, and
+        takes in dictionaries of feature vectors from two children of a given node, and
         outputs the `feature_1` vector for that node
-        previous version: pass concatentation of feature vectors in both orders,
+        previous version: pass concatenation of feature vectors in both orders,
             `(left, right)` and `(right, left)` and add outputs, to apply symmetry
             constraint
         """
@@ -287,8 +287,9 @@ class TransformerEncoderTraversal(TraverseNN):
     For now, we only implement the root-ward traversal.
 
     Attributes:
-        forward_on_tree
-        site_aggregation
+        encoder
+        classifier
+        traverse_stack
     """
 
     def __init__(self, learning_rate=0.01):

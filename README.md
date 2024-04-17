@@ -17,7 +17,7 @@ pip install -e .
 
 We have a workflow implemented in Snakemake (`Snakefile`), which takes as input in `config.yaml` names of models (see *Neural Network Model*) and datasets (see *Training Data*) and trains and evaluates the given models on all given datasets.
 
-To execute the workflow, run `snakemake -c[num_cores]` in the directory `dvpt/train`, where `[num_cores]` should be replaced with the number of cores you want to use.
+To execute the workflow, run `snakemake -c[num_cores]` in the directory `dpvt/train`, where `[num_cores]` should be replaced with the number of cores you want to use.
 
 
 ## Training Data
