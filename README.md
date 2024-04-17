@@ -7,12 +7,17 @@ Deep (neural networks for) Phylogenetics Via Traversals
 mamba env create -f environment.yml
 ```
 
+To install this package locally, clone the repo and in the root folder (with the `setup.py` file) run:
+```bash
+pip install -e .
+```
+
 
 ## Training Workflow
 
 We have a workflow implemented in Snakemake (`Snakefile`), which takes as input in `config.yaml` names of models (see *Neural Network Model*) and datasets (see *Training Data*) and trains and evaluates the given models on all given datasets.
 
-To execute the workflow `snakemake -c[num_cores]`, where `[num_cores]` should be replaced with the number of cores you want to use.
+To execute the workflow, run `snakemake -c[num_cores]` in the directory `dpvt/train`, where `[num_cores]` should be replaced with the number of cores you want to use.
 
 
 ### Hyperparameter Optimization
@@ -65,7 +70,7 @@ As input, the neural network takes the `feature_0` and `feature_1` tensors of th
 4. For each edge, we combine the tensors `node.to_parent["feature_1"]` and `node.from_parent["feature_1"]` using the linear layer in `TraverseNN.final`, to produce a logit. 
 Negative values means the edge is in a maximum parsimony tree, while positive values means the edge is not in a maximum parsimony tree. 
 
-[Current implementation does not do steps 3 and 4, for simplicity]
+
 
 After the tree traversal we us a transformer encoder in `site_aggregation()` to aggregate the per-site information we learned from the tree traversal into a single value for classifying whether an edge is in a MP tree or not.
 
@@ -78,8 +83,6 @@ This Pytorch module inherits from `TraverseNN` and changes the order of the step
 
 
 ## Logging training
-
-To train the model, run `snakemake --cores 1` in the directory `dpvt/train`.
 
 To view training logs, run `tensorboard --logdir .` and direct your browser to `http://localhost:6006/`.
 The tensorboard additionally shows ROC curves for the performance of classification on the test set.

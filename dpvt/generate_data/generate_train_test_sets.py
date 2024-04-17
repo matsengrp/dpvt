@@ -14,14 +14,23 @@ from generate_data.training_data import (
 
 
 def create_training_data(file_path, good_trees, bad_trees):
+    """
+    each label is a list of values corresponding to edges in the following tree
+    topology, ordered by preorder traversal:
 
-    data_dict = {
-        **{tree: 0.0 for tree in good_trees},
-        **{tree: 1.0 for tree in bad_trees},
+          /-2
+    -0/-1|
+         |   /-4
+          \3|
+             \-5
+    """
+    tree_to_label = {
+        **{tree: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] for tree in good_trees},
+        **{tree: [0.0, 0.0, 0.0, 1.0, 0.0, 0.0] for tree in bad_trees},
     }
     # data_dict = {"train": train_data, "val": val_data}
     with open(file_path, "wb") as f:
-        pickle.dump(data_dict, file=f)
+        pickle.dump(tree_to_label, file=f)
 
 
 def main():

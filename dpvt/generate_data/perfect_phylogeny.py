@@ -16,7 +16,8 @@ class PerfectPhylogeny:
     character, the subgraph of nodes with the given character at the given site is
     connected. Options allow for requiring tip sequences to be unique, that no two
     columns in the sequence alignment (of all nodes) are identical, that every edge has
-    at least one substition, and/or every non-terminal edge has at least one substition.
+    at least one substitution, and/or every non-terminal edge has at least one
+    substitution.
 
     The standard use case is to create an instance of the this class from a given ete3
     tree and call make_trees to generate perfect phylogenies on the tree.
@@ -28,7 +29,7 @@ class PerfectPhylogeny:
         nodes (list of ete3.Trees): List of all nodes of the topology in preorder
             traversal. The node indices used throughout this class are indices into this
             list. Note the root always has node index 0.
-        node_count (int): The nunber of nodes in the topology.
+        node_count (int): The number of nodes in the topology.
         node_index (dict): A dictionary mapping a node of the topology to its index in
             the list of nodes.
         leaf_indices (list): A list of leaf node indices in the list of nodes.
@@ -141,8 +142,8 @@ class PerfectPhylogeny:
         """
         Create a single new tree based on indices into self.state_lists and
         self.state_permutations. The nodes of the tree are optionally labelled with the
-        sequence at that node and/or the substitions from the parent node. Returned is a
-        pair consisting of the new tree and truth value for the tree passing additional
+        sequence at that node and/or the substitutions from the parent node. Returned is
+        a pair consisting of the new tree and truth value for the tree passing additional
         requirements. Currently, the only supported additional requirement is that the
         leaf sequences are unique.
         """
@@ -180,7 +181,7 @@ class PerfectPhylogeny:
 
     def do_lists_mut_all_nodes(self, index_lists_indices):
         """
-        Returns the truth value for the speficied state_lists (in self.state_lists)
+        Returns the truth value for the specified state_lists (in self.state_lists)
         giving a perfect phylogeny where every non-root node has at least one mutation.
         """
         subbed_node_count = len(
@@ -194,7 +195,7 @@ class PerfectPhylogeny:
 
     def do_lists_mut_internal_nodes(self, index_lists_indices):
         """
-        Returns the truth value for the speficied state_lists (in self.state_lists)
+        Returns the truth value for the specified state_lists (in self.state_lists)
         giving a perfect phylogeny where every non-root non-leaf node has at least one
         mutation.
         """
@@ -220,7 +221,7 @@ class PerfectPhylogeny:
     ):
         """
         Returns a generator for the perfect phylogenies, with nodes optionally labelled
-        with sequences or substitions, meeting the given requirement. The generator
+        with sequences or substitutions, meeting the given requirement. The generator
         produces all perfect phylogenies meeting the criteria, but without duplicates
         from permuting the order of sites in the sequences.
         """

@@ -90,7 +90,6 @@ def nwk_list_to_trees(nwks):
     for tree in trees:
         for node in tree.traverse():
             node.sequence = node.name
-        assign_features(tree)
     return trees
 
 
@@ -227,6 +226,7 @@ SAMPLE_SIZE = 240
 assert SAMPLE_SIZE % 2 == 0
 seed = 21032024
 
+
 def create_site4_good_trees(n_trees=SAMPLE_SIZE // 2, seed=None):
     """
     generate "good" trees for training by concatenating 2 "good" sites with 1 "bad" and
@@ -242,7 +242,6 @@ def create_site4_good_trees(n_trees=SAMPLE_SIZE // 2, seed=None):
         t4 = random.choice(neutral_trees[:12])
         t1, t2, t3, t4 = random.sample([t1, t2, t3, t4], 4)
         tree = collate_sequences([t1, t2, t3, t4])
-        assign_features(tree)
         trees.append(tree)
     return trees
 
@@ -261,7 +260,6 @@ def create_site4_bad_trees(n_trees=SAMPLE_SIZE // 2, seed=None):
         t4 = random.choice(neutral_trees[:12])
         t1, t2, t3, t4 = random.sample([t1, t2, t3, t4], 4)
         tree = collate_sequences([t1, t2, t3, t4])
-        assign_features(tree)
         trees.append(tree)
     return trees
     
