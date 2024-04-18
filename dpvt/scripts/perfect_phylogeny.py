@@ -23,7 +23,7 @@ class PerfectPhylogeny:
 
     The standard use case is to create an instance of the this class from a given ete3
     Tree and call make_phylogenies to get a generator for perfect phylogenies on the
-    tree, or call make_random_phylogeny to get a single perect phylogeny.
+    tree, or call make_random_phylogeny to get a single perfect phylogeny.
 
     Attributes:
         bad_root_patterns (set): The set of tuples of node indices not allowed as
@@ -269,7 +269,7 @@ class PerfectPhylogeny:
         """
         Create a single new phylogeny based on indices into self.state_tuples and
         self.state_permutations. The nodes of the tree are optionally labelled with the
-        sequence at that node and/or the substitions from the parent node.
+        sequence at that node and/or the substitutions from the parent node.
         """
         seq = lambda n: self.node_sequence(n, state_tuples_indices, perm_indices)
         sub = lambda n: self.node_subs(n, state_tuples_indices, perm_indices)

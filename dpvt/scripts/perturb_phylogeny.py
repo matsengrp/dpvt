@@ -1,6 +1,6 @@
 from dpvt.scripts.utils import Tree
 # from ete4 import Tree as ete4Tree
-from random import randrange
+from random import randrange, choice
 from historydag.parsimony import disambiguate, parsimony_score
 
 def perturb_tree(tree, depth, skip_root=True, exception_on_fail=False):
@@ -34,8 +34,9 @@ def perturb_tree(tree, depth, skip_root=True, exception_on_fail=False):
         else:
             return None
 
-    random_index = randrange(n)
-    selected_node = valid_nodes[random_index]
+    selected_node = choice(valid_nodes)
+    # random_index = randrange(n)
+    # selected_node = valid_nodes[random_index]
     parent_node = None if selected_node.is_root() else selected_node.up
     selected_node.detach()
     is_sorta_tip = lambda x: is_subtree_depth_tip(selected_node, x, depth)
@@ -54,7 +55,7 @@ def perturb_tree(tree, depth, skip_root=True, exception_on_fail=False):
 def tree_depth(node):
     """
     Returns the depth of the tree with the given node as the root. This depth is the
-    number of nodes along the longest path from the given node to a leaf ndoe.
+    number of nodes along the longest path from the given node to a leaf node.
     """
     return node.get_farthest_leaf(topology_only=True)[1] + 1
 
@@ -108,7 +109,7 @@ def sankoff_for_missing_sequences(tree):
     site_count = len(some_leaf.sequence)
     fake_sequence = "N" * site_count
 
-    # The next fews lines are a silly python trick. This is the current fast way to
+    # The next few lines are a silly python trick. This is the current fast way to
     # apply a function to items in an iterable, where the function modifies the items
     # in-place and returns None. Usually faster than a for-loop.
     any(
