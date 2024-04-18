@@ -1,2 +1,7 @@
 models: ["TransformerEncoderTraversal", "traverseNN"]
-data: ["FourLeaf", "FourLeafFourSite", "TenLeaf"]
+data: [
+  "FourLeaf", 
+  "FourLeafFourSite", 
+  # "TenLeaf", 
+  "ThirtyLeaf"
+]
