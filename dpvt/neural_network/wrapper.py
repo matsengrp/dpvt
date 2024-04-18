@@ -72,16 +72,16 @@ class Wrap:
             callbacks=[checkpoint_callback, early_stop_callback],
         )
 
-    def train(self, final_checkpoint):
+    def train(self, checkpoint):
         # train and save trained model
         self.trainer.fit(self.model, self.train_loader, self.val_loader)
-        self.trainer.save_checkpoint(final_checkpoint)
+        self.trainer.save_checkpoint(checkpoint)
 
-    def test(self, final_checkpoint):
+    def test(self, checkpoint):
         # test and save model
         self.model.eval()
         self.trainer.test(self.model, self.test_loader)
-        self.trainer.save_checkpoint(final_checkpoint)
+        self.trainer.save_checkpoint(checkpoint)
 
 
 class HyperWrap:
