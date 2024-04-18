@@ -7,53 +7,13 @@ from itertools import (
 
 import torch
 from ete3 import Tree
+from dpvt.neural_network.models import TraverseNN
 
 STATES = ["A", "G", "C", "T"]
 STATE_TO_IDX = {"A": 0, "G": 1, "C": 2, "T": 3}
 
 
-def assign_features(tree):
-    """
-    modifies input tree by adding a `to_parent` dict attribute, where
-    `to_parent["feature_0"]` is a m-by-4 torch.tensor which records the mutation from
-    the node's parent to the (child) node, e.g., a mutation `A -> T` is encoded as
-    [...,[-1, 0, 0, 1],...]
-    Args:
-        tree (ete3 Tree): has sequence attribute on each node
-    Returns: None
-    """
-    n_sites = len(tree.sequence)
-    for node in tree.traverse():
-        for i in range(n_sites):
-            mut_vec = [0.0, 0.0, 0.0, 0.0]
-            if node.up is None:  # node is root
-                pass
-            else:  # non-root node
-                n_seq = node.sequence[i]
-                p_seq = node.up.sequence[i]
-                # except AttributeError:
-                #     n_seq = node.name
-                #     p_seq = node.up.name
-                try:
-                    mut_vec[STATE_TO_IDX[n_seq]] += 1
-                    mut_vec[STATE_TO_IDX[p_seq]] -= 1
-                except KeyError:
-                    raise ValueError(f"Each node sequence must be in {STATES}")
-            new_row = torch.tensor(mut_vec).unsqueeze(0)
-            if i == 0:
-                node.add_feature("to_parent", {"feature_0": new_row})
-            else:
-                node.to_parent["feature_0"] = torch.cat(
-                    (node.to_parent["feature_0"], new_row)
-                )
-            # try:
-            #     node.to_parent["feature_0"] = torch.cat(
-            #         (node.to_parent["feature_0"], new_row)
-            #     )
-            # except AttributeError:
-            #     node.add_feature("to_parent", {"feature_0": new_row})
-    return None
-
+assign_features = TraverseNN.assign_mutation_vectors
 
 def pattern_to_nwk_list(temp):
     """
@@ -90,7 +50,6 @@ def nwk_list_to_trees(nwks):
     for tree in trees:
         for node in tree.traverse():
             node.sequence = node.name
-        assign_features(tree)
     return trees
 
 
@@ -173,7 +132,7 @@ def mutation_count(tree):
     assign_features(tree)
     count = 0
     for node in tree.traverse():
-        x = node.to_parent["feature_0"]
+        x = node.to_parent["edge_mutation"]
         if torch.count_nonzero(x).item() > 0:
             count += 1
     return count
@@ -227,6 +186,7 @@ SAMPLE_SIZE = 240
 assert SAMPLE_SIZE % 2 == 0
 seed = 21032024
 
+
 def create_site4_good_trees(n_trees=SAMPLE_SIZE // 2, seed=None):
     """
     generate "good" trees for training by concatenating 2 "good" sites with 1 "bad" and
@@ -242,9 +202,9 @@ def create_site4_good_trees(n_trees=SAMPLE_SIZE // 2, seed=None):
         t4 = random.choice(neutral_trees[:12])
         t1, t2, t3, t4 = random.sample([t1, t2, t3, t4], 4)
         tree = collate_sequences([t1, t2, t3, t4])
-        assign_features(tree)
         trees.append(tree)
     return trees
+
 
 def create_site4_bad_trees(n_trees=SAMPLE_SIZE // 2, seed=None):
     """
@@ -261,10 +221,10 @@ def create_site4_bad_trees(n_trees=SAMPLE_SIZE // 2, seed=None):
         t4 = random.choice(neutral_trees[:12])
         t1, t2, t3, t4 = random.sample([t1, t2, t3, t4], 4)
         tree = collate_sequences([t1, t2, t3, t4])
-        assign_features(tree)
         trees.append(tree)
     return trees
-    
+
+
 site4_good_trees = create_site4_good_trees(seed=seed)
 file_name = f"4site_4leaf_{SAMPLE_SIZE}good_trees_{seed}seed.pickle"
 with open(file_name, "wb") as fh:
