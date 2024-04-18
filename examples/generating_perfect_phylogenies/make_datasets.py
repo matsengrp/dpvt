@@ -2,9 +2,9 @@ import pickle
 import torch
 from ete3 import Tree
 
-from dpvt.scripts.utils import Tree as MyTree
-from dpvt.scripts.perfect_phylogeny import PerfectPhylogeny
-from dpvt.scripts.perturb_phylogeny import (
+from dpvt.generate_data.utils import Tree as MyTree
+from dpvt.generate_data.perfect_phylogeny import PerfectPhylogeny
+from dpvt.generate_data.perturb_phylogeny import (
     perturb_tree,
     sankoff_for_missing_sequences,
 )

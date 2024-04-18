@@ -5,7 +5,7 @@ from itertools import (
     product as prod,
     chain,
 )
-from dpvt.scripts.minimal_covers import MinimalCovers
+from dpvt.generate_data.minimal_covers import MinimalCovers
 from math import ceil
 
 

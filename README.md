@@ -25,7 +25,7 @@ Alternatively, run `snakemake --snakefile dpvt/train/Snakefile -c[num_cores]` in
 
 ### Generating Perfect Phylogenies
 A python class for creating perfect phylogenies given a tree topology is in 
-`dpvt/scripts/perfect_phylogeny.py`. 
+`dpvt/generate_data/perfect_phylogeny.py`. 
 
 Call the `make_phylogenies` method to generate all perfect phylogenies (with a certain 
 minimality condition) for a topology. Call the `make_random_phylogeny` method for a single 
@@ -40,7 +40,7 @@ Run time is still sub-optimal. However, generating random perfect phylogenies wi
 or so leaves is doable.
 
 ### Perturbing the phylogenies
-Perturbing trees is handled by `dpvt/scripts/perturb_phylogeny.py`. See
+Perturbing trees is handled by `dpvt/generate_data/perturb_phylogeny.py`. See
 `examples/generating_perfect_phylogenies/perturb_random_perfect_phylogenies.py` for an
 example of generating random perfect phylogenies and perturbing them to obtain a similar 
 phylogeny, but with worse parsimony score.

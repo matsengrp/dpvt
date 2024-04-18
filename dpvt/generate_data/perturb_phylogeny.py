@@ -1,4 +1,4 @@
-from dpvt.scripts.utils import Tree
+from dpvt.generate_data.utils import Tree
 # from ete4 import Tree as ete4Tree
 from random import randrange, choice
 from historydag.parsimony import disambiguate, parsimony_score
