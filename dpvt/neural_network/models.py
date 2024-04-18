@@ -18,8 +18,8 @@ d_hidden_traverse = 32
 
 # site-aggregate transformer parameters
 nhead = 2
-d_model = 2 * d_out_traverse  # size of embedding that we feed into transformer, i.e.
-# 2 * (length of mutation vector), from concatenating in two directions across edge
+d_model = 2 * d_out_traverse  # size of embedding that we feed into site-aggregator,
+# coming from concatenating the traversal output-feature in two directions across edge
 dim_feedforward = 8
 layer_count = 4
 
@@ -272,9 +272,6 @@ class TraverseNN(L.LightningModule):
                 else:  # non-root node
                     n_seq = node.sequence[i]
                     p_seq = node.up.sequence[i]
-                    # except AttributeError:
-                    #     n_seq = node.name
-                    #     p_seq = node.up.name
                     try:
                         mut_vec[STATE_TO_IDX[n_seq]] += 1
                         mut_vec[STATE_TO_IDX[p_seq]] -= 1
@@ -301,7 +298,8 @@ class TransformerEncoderTraversal(TraverseNN):
     for the sequences assigned to the leaf nodes.
 
     The forward function first encodes the mutation features using a transformer encoder
-    and then applies two traversals to the input tree, first root-ward and then leaf-ward
+    to summarize the edge mutations over all sites, and then applies two traversals to
+    the input tree, first root-ward and then leaf-ward.
 
     Attributes:
         encoder
