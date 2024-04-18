@@ -103,8 +103,8 @@ class TraverseNN(L.LightningModule):
         xb, yb = test_batch
         y_pred = self(xb)
         self.test_probs.append(y_pred.detach())
-        self.test_targets.append(yb.unsqueeze(2).int())
-        self.auroc_metric(y_pred, yb.unsqueeze(2).int())
+        self.test_targets.append(yb.unsqueeze(-1).int())
+        self.auroc_metric(y_pred, yb.unsqueeze(-1).int())
         return {}
 
     def on_test_epoch_end(self):
@@ -171,7 +171,7 @@ class TraverseNN(L.LightningModule):
         self.compute_features_via_traversal(tree, len(tree.sequence))
         encoder_output = self.site_aggregate(tree)
         # encoder_output dim = (n_nodes, 1, 8)
-        logit = self.classifier(encoder_output[:, 0, :])
+        logit = self.classifier(encoder_output[:, 0])
         return logit
 
     def compute_features_via_traversal(
