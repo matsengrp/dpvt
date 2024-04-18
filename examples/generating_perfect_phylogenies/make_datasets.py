@@ -14,6 +14,7 @@ def create_training_data(file_path, n_trees, n_leaves):
     Create a collection of phylogenies obtained by randomly mixing a subtree of a perfect
     phylogeny.
     """
+    DEPTH = 4
     n_phylos_per_tree = 32
     tree_data_dict = {}
     for _ in range(n_trees):
@@ -22,7 +23,8 @@ def create_training_data(file_path, n_trees, n_leaves):
         pp = PerfectPhylogeny(tree)
         for _ in range(n_phylos_per_tree):
             phylo = pp.make_random_phylogeny()
-            mixed_phylo = perturb_tree(phylo, depth=3)
+            mixed_phylo = perturb_tree(phylo, depth=DEPTH, exception_on_fail=True)
+            # assert(mixed_phylo is not None)
             sankoff_for_missing_sequences(mixed_phylo)
             # convert custom Tree object to ete3 Tree
             newick = mixed_phylo.write(
@@ -57,8 +59,13 @@ def create_training_data(file_path, n_trees, n_leaves):
     with open(file_path, "wb") as fh:
         pickle.dump(data_dict, file=fh)
 
+N_LEAVES = 30
 def main():
-    create_training_data(file_path="10leaf_perfect.p", n_trees=32, n_leaves=10)
+    create_training_data(
+        file_path=f"{N_LEAVES}leaf_perfect.p", 
+        n_trees=32, 
+        n_leaves=N_LEAVES
+    )
 
 if __name__ == "__main__":
     main()
