@@ -1,16 +1,30 @@
 # from ete3 import Tree
 # from ete4 import Tree as ete4Tree
-from dpvt.scripts.perturb_phylogeny import Tree
+from dpvt.scripts.perturb_phylogeny import Tree, perturb_tree
 from dpvt.scripts.perfect_phylogeny import PerfectPhylogeny
 from dpvt.scripts.utils import newick_sub
 import time
 import matplotlib.pyplot as plt
 import pandas as pd
 
+def test_make_random_phylo():
+    t = Tree()
+    t.populate(10, model="uniform")
+    pp = PerfectPhylogeny(t)
+    phylo = pp.make_random_phylogeny()
+    assert(len(phylo.get_leaf_names()) == 10)
+
+def test_random_perturb():
+    t = Tree()
+    t.populate(10, model="uniform")
+    pp = PerfectPhylogeny(t)
+    phylo = pp.make_random_phylogeny()
+    phylo = perturb_tree(phylo, depth=3)
+    assert(len(phylo.get_leaf_names()) == 10)
 
 def check_randomness():
-    # Currenly not uniform random. There are hotspots. It seems worse when requiring
-    # subsitutions on all internal edges instead of all edges. Is that because there are
+    # Currently not uniform random. There are hotspots. It seems worse when requiring
+    # substitutions on all internal edges instead of all edges. Is that because there are
     # more of the latter or is there something about the enumeration process?
     reps = 1000
 
