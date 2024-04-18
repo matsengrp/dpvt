@@ -118,23 +118,23 @@ class TraverseNN(L.LightningModule):
                 consisting of the characters A, G, C, T
         """
         self.assign_mutation_vectors(tree)
-        self.tree_traversal_mlp(tree, len(tree.sequence))
+        self.compute_features_via_traversal(tree, len(tree.sequence))
         encoder_output = self.site_aggregate(tree)
         # encoder_output dim = (n_nodes, 1, 8)
         logit = self.classifier(encoder_output[:, 0])
         return logit
 
-    def tree_traversal_mlp(
+    def compute_features_via_traversal(
         self,
         tree: Tree,
         seq_length,
         feature_name="edge_mutation",
     ):
         """
-        Takes an ete3.Tree as input and outputs a tensor of dimension
-        (n_edges, n_sites, n_states=4). At each edge and each site, the tensor encodes a
-        summary of the mutations that occurred on the subtree on either side of the
-        specified edge, at the specified site.
+        Takes an ete3.Tree as input and assigns a feature to each node which is a tensor
+        of dimension (n_edges, n_sites, n_states=4). At each edge and each site, the
+        tensor encodes a summary of the mutations that occurred on the subtree on either
+        side of the specified edge, at the specified site.
         Args:
             tree (ete3 Tree): each node has a torch tensor attribute
                 to_parent["edge_mutation"] that encodes the mutation between the node and
@@ -303,8 +303,6 @@ class TransformerEncoderTraversal(TraverseNN):
     The forward function first encodes the mutation features using a transformer encoder
     and then applies two traversals to the input tree, first root-ward and then leaf-ward
 
-    For now, we only implement the root-ward traversal.
-
     Attributes:
         encoder
         classifier
@@ -333,7 +331,7 @@ class TransformerEncoderTraversal(TraverseNN):
         """
         self.assign_mutation_vectors(tree)
         self.site_aggregate(tree)
-        self.tree_traversal_mlp(
+        self.compute_features_via_traversal(
             tree, seq_length=1, feature_name="all_sites_edge_mutation"
         )
         output = torch.stack(
