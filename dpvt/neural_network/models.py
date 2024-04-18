@@ -9,13 +9,19 @@ STATES = ["A", "G", "C", "T"]
 STATE_TO_IDX = {"A": 0, "G": 1, "C": 2, "T": 3}
 n_states = len(STATES)
 
-# transformer parameters
+# neural network parameters
+learning_rate = 0.01
+
+# traverse stack parameters
+d_out_traverse = 4
+d_hidden_traverse = 32
+
+# site-aggregate transformer parameters
 nhead = 2
-d_model = 2 * n_states  # size of embedding that we feed into transformer, i.e.
+d_model = 2 * d_out_traverse  # size of embedding that we feed into transformer, i.e.
 # 2 * (length of mutation vector), from concatenating in two directions across edge
 dim_feedforward = 8
 layer_count = 4
-learning_rate = 0.01
 
 
 class TraverseNN(L.LightningModule):
@@ -44,12 +50,11 @@ class TraverseNN(L.LightningModule):
 
     def __init__(self, learning_rate=0.01):
         super().__init__()
-        # learning rate
         self.lr = learning_rate
         self.traverse_stack = nn.Sequential(
-            nn.Linear(2 * n_states + d_model, 32),
+            nn.Linear(2 * n_states + 2 * d_out_traverse, d_hidden_traverse),
             nn.ReLU(),
-            nn.Linear(32, d_model // 2),
+            nn.Linear(d_hidden_traverse, d_out_traverse),
         )
         self.encoder_layer = nn.TransformerEncoderLayer(
             d_model=d_model,
@@ -203,7 +208,7 @@ class TraverseNN(L.LightningModule):
         # print("input:", input_features)
         # print("input dim:", input_features.size())
         out = self.encoder(input_features)
-        # out dim = (n_nodes, n_sites, 8)
+        # out dim = (n_nodes, n_sites, d_model=8)
         return out
 
     def node_aggregate(
@@ -303,7 +308,7 @@ class TransformerEncoderTraversal(TraverseNN):
             dim_feedforward=dim_feedforward,
         )
         self.encoder = nn.TransformerEncoder(self.encoder_layer, layer_count)
-        self.classifier = nn.Linear(2 * n_states, 1)
+        self.classifier = nn.Linear(d_model, 1)
 
     def forward_on_tree(self, tree: Tree):
         """
@@ -332,7 +337,7 @@ class TransformerEncoderTraversal(TraverseNN):
                 for node in tree.traverse(strategy="preorder")
             ]
         )
-        # output dim = (n_nodes, 8)
+        # output dim = (n_nodes, d_model=8)
         logit = self.classifier(output)
         return logit
 
