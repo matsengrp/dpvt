@@ -60,7 +60,6 @@ class TraverseNN(L.LightningModule):
             d_model=d_model,
             nhead=nhead,
             dim_feedforward=dim_feedforward,
-            # batch_first=True,
         )
         self.encoder = nn.TransformerEncoder(self.encoder_layer, layer_count)
         self.classifier = nn.Linear(d_model, 1)
@@ -72,7 +71,7 @@ class TraverseNN(L.LightningModule):
     def training_step(self, train_batch, batch_idx):
         xb, yb = train_batch
         pred = torch.stack([self.forward_on_tree(item) for item in xb])
-        loss = F.binary_cross_entropy_with_logits(pred, yb.unsqueeze(2))
+        loss = F.binary_cross_entropy_with_logits(pred, yb.unsqueeze(-1))
         self.log("train_loss", loss, batch_size=len(xb), on_epoch=True)
         # log predictions on positive- and negative-datapoints, and show data in console
         # progress bar
@@ -86,7 +85,7 @@ class TraverseNN(L.LightningModule):
     def validation_step(self, val_batch, batch_idx):
         xb, yb = val_batch
         pred = torch.stack([self.forward_on_tree(item) for item in xb])
-        loss = F.binary_cross_entropy_with_logits(pred, yb.unsqueeze(2))
+        loss = F.binary_cross_entropy_with_logits(pred, yb.unsqueeze(-1))
         self.log("val_loss", loss, batch_size=len(xb))
 
     def forward(self, input, optimized=False):
@@ -120,7 +119,7 @@ class TraverseNN(L.LightningModule):
         """
         self.assign_mutation_vectors(tree)
         self.tree_traversal_mlp(tree, len(tree.sequence))
-        encoder_output = self.site_aggregation(tree)
+        encoder_output = self.site_aggregate(tree)
         # encoder_output dim = (n_nodes, 1, 8)
         logit = self.classifier(encoder_output[:, 0])
         return logit
@@ -192,7 +191,7 @@ class TraverseNN(L.LightningModule):
                 node.from_parent["clade_mutation_feature"] = feature
         return tree
 
-    def site_aggregation(self, tree):
+    def site_aggregate(self, tree):
         """
         Takes a tensor encoding site-wise mutations on subclades of a tree and
         aggregates its n_sites using a Transformer
@@ -208,7 +207,7 @@ class TraverseNN(L.LightningModule):
                 )
                 for node in tree.traverse(strategy="preorder")
             ]
-        )  # batch_size = 1
+        )
         # input_features dim = (n_nodes, n_sites, d_model=8)
         ## debug
         # print("input:", input_features)
@@ -227,7 +226,10 @@ class TraverseNN(L.LightningModule):
     ):
         """
         Takes in dictionaries of feature vectors from two neighbor-nodes of a given
-        node, and outputs the `clade_mutation_feature` vector for that node
+        node, and outputs the `clade_mutation_feature` vector for that node.
+        The two neighbor-nodes can be either:
+            - two children of a node, during root-ward traversal, or
+            - one parent and one sister of a node, during leaf-ward traversal.
         """
         i = site_idx
         first_data = torch.cat(
@@ -248,7 +250,7 @@ class TraverseNN(L.LightningModule):
         output = self.traverse_stack(combined_data)
         if symmetrize:
             output += self.traverse_stack(torch.cat((first_data, second_data)))
-        return output  # output.unsqueeze(dim=0)
+        return output
 
     @staticmethod
     def assign_mutation_vectors(tree):
@@ -330,7 +332,7 @@ class TransformerEncoderTraversal(TraverseNN):
                 its parent, e.g. A -> G is encoded by [-1, 1, 0, 0]
         """
         self.assign_mutation_vectors(tree)
-        self.site_aggregation(tree)
+        self.site_aggregate(tree)
         self.tree_traversal_mlp(
             tree, seq_length=1, feature_name="all_sites_edge_mutation"
         )
@@ -350,7 +352,7 @@ class TransformerEncoderTraversal(TraverseNN):
         logit = self.classifier(output)
         return logit
 
-    def site_aggregation(self, tree: Tree):
+    def site_aggregate(self, tree: Tree):
         for node in tree.traverse(strategy="preorder"):
             input = node.to_parent["edge_mutation"]
             # input dim = (n_sites, n_states=4)
