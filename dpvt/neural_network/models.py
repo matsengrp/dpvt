@@ -147,11 +147,13 @@ class TraverseNN(L.LightningModule):
         # root-ward traversal
         for node in tree.traverse(strategy="postorder"):
             if node.is_leaf():
-                node.to_parent["clade_mutation"] = torch.zeros((seq_length, 4))
+                node.to_parent["clade_mutation_feature"] = torch.zeros((seq_length, 4))
             elif len(node.children) == 1:  # node is root with single child
                 assert node.up is None
                 child = node.children[0]
-                node.to_parent["clade_mutation"] = child.to_parent["clade_mutation"]
+                node.to_parent["clade_mutation_feature"] = child.to_parent[
+                    "clade_mutation_feature"
+                ]
             else:
                 feature_1 = torch.zeros((seq_length, 4))
                 try:
@@ -165,17 +167,17 @@ class TraverseNN(L.LightningModule):
                     feature_1[i] = self.node_aggregate(
                         child1.to_parent, child2.to_parent, feature_name, site_idx=i
                     )
-                node.to_parent["clade_mutation"] = feature_1
+                node.to_parent["clade_mutation_feature"] = feature_1
         # leaf-ward traversal
         for node in tree.traverse(strategy="preorder"):
             feature_1 = torch.zeros((seq_length, 4))
             if node.is_root():
-                node.from_parent["clade_mutation"] = feature_1
+                node.from_parent["clade_mutation_feature"] = feature_1
             elif node.up.is_root():
                 assert (
                     len(node.up.children) == 1
                 ), "Error: root of tree should have single child"
-                node.from_parent["clade_mutation"] = feature_1
+                node.from_parent["clade_mutation_feature"] = feature_1
             else:
                 parent = node.up
                 sister = node.get_sisters()[0]
@@ -183,7 +185,7 @@ class TraverseNN(L.LightningModule):
                     feature_1[i] = self.node_aggregate(
                         parent.from_parent, sister.to_parent, feature_name, site_idx=i
                     )
-                node.from_parent["clade_mutation"] = feature_1
+                node.from_parent["clade_mutation_feature"] = feature_1
         return tree
 
     def site_aggregation(self, tree):
@@ -195,8 +197,8 @@ class TraverseNN(L.LightningModule):
             [
                 torch.cat(
                     (
-                        node.to_parent["clade_mutation"],
-                        node.from_parent["clade_mutation"],
+                        node.to_parent["clade_mutation_feature"],
+                        node.from_parent["clade_mutation_feature"],
                     ),
                     dim=1,
                 )
@@ -228,11 +230,17 @@ class TraverseNN(L.LightningModule):
         """
         i = site_idx
         first_data = torch.cat(
-            (first_node_dict[feature_name][i], first_node_dict["clade_mutation"][i]),
+            (
+                first_node_dict[feature_name][i],
+                first_node_dict["clade_mutation_feature"][i],
+            ),
             dim=0,
         )
         second_data = torch.cat(
-            (second_node_dict[feature_name][i], second_node_dict["clade_mutation"][i]),
+            (
+                second_node_dict[feature_name][i],
+                second_node_dict["clade_mutation_feature"][i],
+            ),
             dim=0,
         )
         combined_data = torch.cat((first_data, second_data))
@@ -329,8 +337,8 @@ class TransformerEncoderTraversal(TraverseNN):
             [
                 torch.cat(
                     (
-                        node.to_parent["clade_mutation"],
-                        node.from_parent["clade_mutation"],
+                        node.to_parent["clade_mutation_feature"],
+                        node.from_parent["clade_mutation_feature"],
                     ),
                     dim=1,
                 ).squeeze()
