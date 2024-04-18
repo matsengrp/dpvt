@@ -47,7 +47,8 @@ Be careful, there are many perfect phylogenies even for a very small topology.
 
 ### Data format
 
-We currently assume that training/testing/validation data is pickled as one dictionary with keys being trees and values determining whether the tree is a MP tree (label `0`) or not (label `1`).
+We currently assume that training/testing/validation data is pickled as one dictionary with keys being trees and values being list of labels determining whether an edge is in a MP tree (label `0`) or not (label `1`).
+These labels are sorted according to a pre-order traversal.
 Our training/validation/testing data split is 0.6/0.2/0.2 and when splitting the data we ensure that we get balanced training, validation, and testing set.
 
 
@@ -86,14 +87,9 @@ At entry $i$, values near `0.0` mean the $i$-th edge is in a maximum parsimony t
 The output values are arranged to correspond to edges in preorder traversal order.
 
 
-After the tree traversal we us a transformer encoder in `site_aggregation()` to aggregate the per-site information we learned from the tree traversal into a single value for classifying whether an edge is in a MP tree or not.
-
-[At the current stage, we only make predictions to determine whether the tree is a MP tree or not]
-
-
 ### TransformerEncoderTraversal
 
-This Pytorch module inherits from `TraverseNN` and changes the order of the steps described for this module to first aggregate per-site information at every node of a tree and then use the learned features for the tree traversal.
+This Pytorch module inherits from `TraverseNN` and changes the order of the steps described for this module to first aggregate per-site information at every node of a tree (step 3.) and then use the learned features for the tree traversal (step 2.).
 
 
 ## Logging training
