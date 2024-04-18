@@ -13,6 +13,7 @@ dataset_dict = {
     "FourLeafFourSite": script_directory.parent / "data/4leaf4site.p",
     "FourLeaf": script_directory.parent / "data/4leaf.p",
     "TenLeaf": script_directory.parent / "data/10leaf_perfect.p",
+    "ThirtyLeaf": script_directory.parent / "data/30leaf_perfect.p",
 }
 
 
