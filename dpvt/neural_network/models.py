@@ -133,9 +133,9 @@ class TraverseNN(L.LightningModule):
     ):
         """
         Takes an ete3.Tree as input and outputs a tensor of dimension
-        (n_edges, n_sites, 4). At each edge and each site, the tensor encodes a summary
-        of the mutations that occurred on the subtree on either side of the specified
-        edge, at the specified site.
+        (n_edges, n_sites, n_states=4). At each edge and each site, the tensor encodes a
+        summary of the mutations that occurred on the subtree on either side of the
+        specified edge, at the specified site.
         Args:
             tree (ete3 Tree): each node has a torch tensor attribute
                 to_parent["edge_mutation"] that encodes the mutation between the node and
@@ -147,7 +147,9 @@ class TraverseNN(L.LightningModule):
         # root-ward traversal
         for node in tree.traverse(strategy="postorder"):
             if node.is_leaf():
-                node.to_parent["clade_mutation_feature"] = torch.zeros((seq_length, 4))
+                node.to_parent["clade_mutation_feature"] = torch.zeros(
+                    (seq_length, d_out_traverse)
+                )
             elif len(node.children) == 1:  # node is root with single child
                 assert node.up is None
                 child = node.children[0]
@@ -155,7 +157,7 @@ class TraverseNN(L.LightningModule):
                     "clade_mutation_feature"
                 ]
             else:
-                feature_1 = torch.zeros((seq_length, 4))
+                feature = torch.zeros((seq_length, d_out_traverse))
                 try:
                     child1, child2 = node.children
                 except ValueError:
@@ -164,28 +166,30 @@ class TraverseNN(L.LightningModule):
                         "{len(node.children)} children"
                     )
                 for i in range(seq_length):
-                    feature_1[i] = self.node_aggregate(
+                    feature[i] = self.node_aggregate(
                         child1.to_parent, child2.to_parent, feature_name, site_idx=i
                     )
-                node.to_parent["clade_mutation_feature"] = feature_1
+                node.to_parent["clade_mutation_feature"] = feature
         # leaf-ward traversal
         for node in tree.traverse(strategy="preorder"):
-            feature_1 = torch.zeros((seq_length, 4))
+            feature = torch.zeros((seq_length, d_out_traverse))
             if node.is_root():
-                node.from_parent["clade_mutation_feature"] = feature_1
+                node.from_parent["clade_mutation_feature"] = feature
             elif node.up.is_root():
                 assert (
                     len(node.up.children) == 1
                 ), "Error: root of tree should have single child"
-                node.from_parent["clade_mutation_feature"] = feature_1
+                node.from_parent["clade_mutation_feature"] = feature
             else:
                 parent = node.up
+                # `node` should have a single sister node
+                assert len(node.get_sisters()) == 1
                 sister = node.get_sisters()[0]
                 for i in range(seq_length):
-                    feature_1[i] = self.node_aggregate(
+                    feature[i] = self.node_aggregate(
                         parent.from_parent, sister.to_parent, feature_name, site_idx=i
                     )
-                node.from_parent["clade_mutation_feature"] = feature_1
+                node.from_parent["clade_mutation_feature"] = feature
         return tree
 
     def site_aggregation(self, tree):
@@ -222,11 +226,8 @@ class TraverseNN(L.LightningModule):
         symmetrize=False,
     ):
         """
-        takes in dictionaries of feature vectors from two children of a given node, and
-        outputs the `feature_1` vector for that node
-        previous version: pass concatenation of feature vectors in both orders,
-            `(left, right)` and `(right, left)` and add outputs, to apply symmetry
-            constraint
+        Takes in dictionaries of feature vectors from two neighbor-nodes of a given
+        node, and outputs the `clade_mutation_feature` vector for that node
         """
         i = site_idx
         first_data = torch.cat(
@@ -252,10 +253,10 @@ class TraverseNN(L.LightningModule):
     @staticmethod
     def assign_mutation_vectors(tree):
         """
-        modifies input tree by adding a `to_parent` and `from_parent` dict attributes.
-        `to_parent["edge_mutation"]` is a m-by-4 torch.tensor which records the mutation
-        from the node's parent to the (child) node, e.g., a mutation `A -> T` is encoded
-        as [...,[-1, 0, 0, 1],...]
+        Modifies input tree by adding a `to_parent` and `from_parent` dict attributes.
+        `to_parent["edge_mutation"]` is a size (n_sites, n_states=4) torch.tensor which
+        records the mutation from the node's parent to the (child) node,
+        e.g., a mutation `A -> T` is encoded as [...,[-1, 0, 0, 1],...]
         Args:
             tree (ete3 Tree): has sequence attribute on each node
         Returns: None
@@ -352,9 +353,9 @@ class TransformerEncoderTraversal(TraverseNN):
     def site_aggregation(self, tree: Tree):
         for node in tree.traverse(strategy="preorder"):
             input = node.to_parent["edge_mutation"]
-            # input dim = (n_sites, 4)
+            # input dim = (n_sites, n_states=4)
             output = self.encoder(input)
-            # output dim = (n_sites, 4)
+            # output dim = (n_sites, n_states=4)
             # assign learned features to nodes
             node.to_parent["all_sites_edge_mutation"] = output
             node.from_parent["all_sites_edge_mutation"] = -output
