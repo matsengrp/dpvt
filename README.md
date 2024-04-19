@@ -69,6 +69,17 @@ At entry $i$, values near `0.0` mean the $i$-th edge is in a maximum parsimony t
 The output values are arranged to correspond to edges in preorder traversal order.
 
 
+### TraverseMaxPooling
+
+This model is very similar to `TraverseNN`, but we replace step 3. with a simpler aggregation method.
+We aggregate sites by simply outputting as feature the maximum of `feature[i]` over all sites.
+
+
+### TraverseAvgPooling
+
+This model is very similar to `TraverseNN`, but we replace step 3. with a simpler aggregation method.
+We aggregate sites by simply outputting as feature the average of `feature[i]` over all sites.
+
 
 ## Logging training
 
