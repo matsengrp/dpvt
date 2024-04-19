@@ -293,32 +293,56 @@ class TraverseNN(L.LightningModule):
 
 class TraverseMaxPooling(TraverseNN):
     """
-    Pytorch module inherited from TraveseNN, which replaces the site aggregation
+    Pytorch module inherited from TraverseNN, which replaces the site aggregation
     by taking the maximum feature of the output of the MLP for classification
     (maximum over all site)
     """
 
-    def site_aggregation(self, input_features):
+    def site_aggregate(self, tree):
         """
         Takes an encoding of the root sequence of a tree and aggregates its n_sites
         by choosing the max entry of each feature position over all sites
         """
-        max_values, _ = torch.max(input_features, dim=0, keepdim=True)
+        input_features = torch.stack(
+            [
+                torch.cat(
+                    (
+                        node.to_parent["clade_mutation_feature"],
+                        node.from_parent["clade_mutation_feature"],
+                    ),
+                    dim=1,
+                )
+                for node in tree.traverse(strategy="preorder")
+            ]
+        )
+        max_values, _ = torch.max(input_features, dim=1, keepdim=True)
         return max_values
 
 
 class TraverseAvgPooling(TraverseNN):
     """
-    Pytorch module inherited from TraveseNN, which replaces the site aggregation
+    Pytorch module inherited from TraverseNN, which replaces the site aggregation
     by taking the sum of feature over all sites
     """
 
-    def site_aggregation(self, input_features):
+    def site_aggregate(self, tree):
         """
         Takes an encoding of the root sequence of a tree and aggregates its n_sites
         by choosing the feature of the site with max sum over all features entries
         """
-        col_sums = input_features.mean(dim=0, keepdim=True)
+        input_features = torch.stack(
+            [
+                torch.cat(
+                    (
+                        node.to_parent["clade_mutation_feature"],
+                        node.from_parent["clade_mutation_feature"],
+                    ),
+                    dim=1,
+                )
+                for node in tree.traverse(strategy="preorder")
+            ]
+        )
+        col_sums = input_features.mean(dim=1, keepdim=True)
         return col_sums
 
 
