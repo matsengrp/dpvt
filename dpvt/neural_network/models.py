@@ -295,7 +295,7 @@ class TraverseMaxPooling(TraverseNN):
     """
     Pytorch module inherited from TraverseNN, which replaces the site aggregation
     by taking the maximum feature of the output of the MLP for classification
-    (maximum over all site)
+    (maximum over all sites)
     """
 
     def site_aggregate(self, tree):
@@ -322,7 +322,7 @@ class TraverseMaxPooling(TraverseNN):
 class TraverseAvgPooling(TraverseNN):
     """
     Pytorch module inherited from TraverseNN, which replaces the site aggregation
-    by taking the sum of feature over all sites
+    by taking the average of features over all sites
     """
 
     def site_aggregate(self, tree):
