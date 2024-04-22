@@ -3,7 +3,12 @@ import sys
 snakefile_dir = workflow.basedir
 sys.path.append(snakefile_dir + "/..")
 
-from dpvtex.dpvt_zoo import train_model, trained_model_path, best_model_params_path, optimize_hyperparameters
+from dpvtex.dpvt_zoo import (
+    train_model, 
+    trained_model_path, 
+    best_model_params_path, 
+    optimize_hyperparameters,
+)
 
 config_path = os.path.join(snakefile_dir, "config.yaml")
 configfile: config_path

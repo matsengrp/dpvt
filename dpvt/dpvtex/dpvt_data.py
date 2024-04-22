@@ -44,11 +44,11 @@ def train_val_data_of_nicknames(data_name):
     trees = list(data_dict.keys())
 
     labels_array = np.array(labels)
-    sum_of_ones = np.sum(labels, axis=1)
+    n_bad_edges = np.sum(labels, axis=1)
 
     train_val_data, test_data, train_val_labels, test_labels, sum_train_val, _ = (
         train_test_split(
-            trees, labels, sum_of_ones, test_size=test_size, stratify=sum_of_ones
+            trees, labels, n_bad_edges, test_size=test_size, stratify=n_bad_edges
         )
     )
     train_data, val_data, train_labels, val_labels = train_test_split(
