@@ -31,23 +31,10 @@ def create_training_data_toy(file_path, good_trees, bad_trees):
         **{tree: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] for tree in good_trees},
         **{tree: [0.0, 0.0, 0.0, 1.0, 0.0, 0.0] for tree in bad_trees},
     }
-    # Calculate the number of items for training and validation
-    num_items = len(tree_to_label)
-    num_train = int(num_items * 0.8)
 
-    # Shuffle the keys and split them
-    keys = list(tree_to_label.keys())
-    random_idx = torch.randperm(num_items)
-    train_keys = [keys[i] for i in random_idx[:num_train]]
-    val_keys = [keys[i] for i in random_idx[num_train:]]
-
-    # Create subsets based on the split keys
-    train_data = {key: tree_to_label[key] for key in train_keys}
-    val_data = {key: tree_to_label[key] for key in val_keys}
-
-    data_dict = {"train": train_data, "val": val_data}
+    # data_dict = {"train": train_data, "val": val_data}
     with open(file_path, "wb") as f:
-        pickle.dump(data_dict, file=f)
+        pickle.dump(tree_to_label, file=f)
 
 
 def create_training_data_perfect(file_path, n_leaves, n_trees, n_phylos_per_tree,):
@@ -62,21 +49,8 @@ def create_training_data_perfect(file_path, n_leaves, n_trees, n_phylos_per_tree
         n_phylos_per_tree=n_phylos_per_tree,
     )
 
-    # shuffle keys and make train / validation split 
-    num_items = n_trees * n_phylos_per_tree
-    num_train = int(num_items * 0.8)
-
-    keys = list(tree_data_dict.keys())
-    random_idx = torch.randperm(num_items)
-    train_keys = [keys[i] for i in random_idx[:num_train]]
-    val_keys = [keys[i] for i in random_idx[num_train:]]
-
-    train_data = {key: tree_data_dict[key] for key in train_keys}
-    val_data = {key: tree_data_dict[key] for key in val_keys}
-
-    data_dict = {"train": train_data, "val": val_data}
     with open(file_path, "wb") as fh:
-        pickle.dump(data_dict, file=fh)
+        pickle.dump(tree_data_dict, file=fh)
 
 
 def main():
