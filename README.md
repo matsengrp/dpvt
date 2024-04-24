@@ -91,6 +91,17 @@ The output values are arranged to correspond to edges in preorder traversal orde
 
 This Pytorch module inherits from `TraverseNN` and changes the order of the steps described for this module to first aggregate per-site information at every node of a tree (step 3.) and then use the learned features for the tree traversal (step 2.).
 
+### TraverseMaxPooling
+
+This model is very similar to `TraverseNN`, but we replace step 3. with a simpler aggregation method.
+We aggregate sites by simply outputting as feature the maximum of `feature[i]` over all sites.
+
+
+### TraverseAvgPooling
+
+This model is very similar to `TraverseNN`, but we replace step 3. with a simpler aggregation method.
+We aggregate sites by simply outputting as feature the average of `feature[i]` over all sites.
+
 
 ## Logging training
 

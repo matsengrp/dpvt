@@ -3,9 +3,13 @@ from neural_network.wrapper import Wrap, HyperWrap
 from dpvtex.dpvt_data import train_val_data_of_nicknames
 
 
-def create_model(model_name):
-    if model_name == "traverseNN":
-        model = models.TraverseNN
+def create_model(model_name, learning_rate):
+    if model_name == "TraverseNN":
+        model = models.TraverseNN(learning_rate)
+    elif model_name == "TraverseMaxPooling":
+        model = models.TraverseMaxPooling(learning_rate)
+    elif model_name == "TraverseAvgPooling":
+        model = models.TraverseAvgPooling(learning_rate)
     elif model_name == "TransformerEncoderTraversal":
         model = models.TransformerEncoderTraversal
     return model

@@ -341,6 +341,61 @@ class TraverseNN(L.LightningModule):
         return None
 
 
+class TraverseMaxPooling(TraverseNN):
+    """
+    Pytorch module inherited from TraverseNN, which replaces the site aggregation
+    by taking the maximum feature of the output of the MLP for classification
+    (maximum over all sites)
+    """
+
+    def site_aggregate(self, tree):
+        """
+        Takes an encoding of the root sequence of a tree and aggregates its n_sites
+        by choosing the max entry of each feature position over all sites
+        """
+        input_features = torch.stack(
+            [
+                torch.cat(
+                    (
+                        node.to_parent["clade_mutation_feature"],
+                        node.from_parent["clade_mutation_feature"],
+                    ),
+                    dim=1,
+                )
+                for node in tree.traverse(strategy="preorder")
+            ]
+        )
+        max_values, _ = torch.max(input_features, dim=1, keepdim=True)
+        return max_values
+
+
+class TraverseAvgPooling(TraverseNN):
+    """
+    Pytorch module inherited from TraverseNN, which replaces the site aggregation
+    by taking the average of features over all sites
+    """
+
+    def site_aggregate(self, tree):
+        """
+        Takes an encoding of the root sequence of a tree and aggregates its n_sites
+        by choosing the feature of the site with max sum over all features entries
+        """
+        input_features = torch.stack(
+            [
+                torch.cat(
+                    (
+                        node.to_parent["clade_mutation_feature"],
+                        node.from_parent["clade_mutation_feature"],
+                    ),
+                    dim=1,
+                )
+                for node in tree.traverse(strategy="preorder")
+            ]
+        )
+        col_sums = input_features.mean(dim=1, keepdim=True)
+        return col_sums
+
+
 class TransformerEncoderTraversal(TraverseNN):
     """
     A pytorch module which takes a list of ete3.Trees as input and outputs 0's and 1's
