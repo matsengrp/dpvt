@@ -43,7 +43,7 @@ def train_val_data_of_nicknames(data_name):
     labels = list(data_dict.values())
     trees = list(data_dict.keys())
 
-    labels_array = np.array(labels)
+    # labels_array = np.array(labels)
     n_bad_edges = np.sum(labels, axis=1)
 
     train_val_data, test_data, train_val_labels, test_labels, sum_train_val, _ = (
