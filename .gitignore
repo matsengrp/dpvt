@@ -166,6 +166,8 @@ cython_debug/
 
 # pytorch-lightning logs
 lightning_logs/
+trained_models/
+hyper_checkpoints/
 
 # snakemake workflow
 .snakemake

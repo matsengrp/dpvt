@@ -21,6 +21,14 @@ To execute the workflow, run `snakemake -c[num_cores]` in the directory `dpvt/tr
 Alternatively, run `snakemake --snakefile dpvt/train/Snakefile -c[num_cores]` in the root directory, or from any directory with the `--snakefile` path argument replaced as appropriate.
 
 
+### Hyperparameter Optimization
+
+By default, running the workflow with Snakemake will perform hyperparameter tuning with optuna for all models and datasets.
+All models tested are saved in `hyper_checkpoints/`, which also contains `json` files with the best hyperparameters.
+These are then used for model training.
+If the files with best hyperparameters exist already for a given model and dataset, running the workflow will skip hyperparameter tuning.
+
+
 ## Training Data
 
 ### Generating Perfect Phylogenies (not yet tested for correctness or completeness)
@@ -37,7 +45,17 @@ Be careful, there are many perfect phylogenies even for a very small topology.
 ...coming soon...
 
 
+### Data format
+
+We currently assume that training/testing/validation data is pickled as one dictionary with keys being trees and values being list of labels determining whether an edge is in a MP tree (label `0`) or not (label `1`).
+These labels are sorted according to a pre-order traversal.
+Our training/validation/testing data split is 0.6/0.2/0.2 and when splitting the data we ensure that we get balanced training, validation, and testing set.
+
+
 ## Neural network model
+
+
+### TraverseNN
 
 We define a Pytorch module `TraverseNN` which evaluates whether edges in a given labeled tree appear in a maximum parsimony tree, for the given sequences on the leaf nodes.
 This module is defined in `dpvt/neural_network/models.py`.
@@ -69,6 +87,10 @@ At entry $i$, values near `0.0` mean the $i$-th edge is in a maximum parsimony t
 The output values are arranged to correspond to edges in preorder traversal order.
 
 
+### TransformerEncoderTraversal
+
+This Pytorch module inherits from `TraverseNN` and changes the order of the steps described for this module to first aggregate per-site information at every node of a tree (step 3.) and then use the learned features for the tree traversal (step 2.).
+
 ### TraverseMaxPooling
 
 This model is very similar to `TraverseNN`, but we replace step 3. with a simpler aggregation method.
@@ -84,6 +106,7 @@ We aggregate sites by simply outputting as feature the average of `feature[i]` o
 ## Logging training
 
 To view training logs, run `tensorboard --logdir .` and direct your browser to `http://localhost:6006/`.
+The tensorboard additionally shows ROC curves for the performance of classification on the test set.
 
 
 ## File structure of this repo
@@ -91,4 +114,4 @@ To view training logs, run `tensorboard --logdir .` and direct your browser to `
 - `train`: contains `Snakefile` and `config.yaml`, in which models and datasets for training are specified.
 - `neural_network`: contains `models.py`, in which models are defined, and `wrapper.py`, containing wrappers for these models.
 - `dpvtex`: contains `dpvt_data.py`, which implements functions to get datasets for a given nickname and `dpvt_zoo.py`, which creates models for a given nickname. These nicknames are provided to the `Snakefile` in `config.yaml`.
-- `generate_data.py` contains files for generating training and validation data. The data should be saved in data. Data generation is independent of the workflow in `Snakefile`.
+- `generate_data.py`: contains files for generating training and validation data. The data should be saved in data. Data generation is independent of the workflow in `Snakefile`.

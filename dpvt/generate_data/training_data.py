@@ -15,6 +15,7 @@ STATE_TO_IDX = {"A": 0, "G": 1, "C": 2, "T": 3}
 
 assign_features = TraverseNN.assign_mutation_vectors
 
+
 def pattern_to_nwk_list(temp):
     """
     Takes a template newick string, containing 0's and 1's, and replaces these states
