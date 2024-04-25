@@ -1,7 +1,6 @@
 import os
 import sys
 from pathlib import Path
-import torch
 import pickle
 from ete3 import Tree
 

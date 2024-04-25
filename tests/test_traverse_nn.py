@@ -13,12 +13,12 @@ def test_nn():
 
     tree = good_trees[0]
     out = model([tree])
-    for x in out:
+    for x in out[0]:
         assert x.item() > 0
 
     tree = site4_good_trees[0]
     out = model([tree])
-    for x in out:
+    for x in out[0]:
         assert x.item() > 0
 
 
@@ -27,10 +27,10 @@ def test_transformer_first_nn():
 
     tree = good_trees[0]
     out = model([tree])
-    for x in out:
+    for x in out[0]:
         assert x.item() > 0
 
     tree = site4_good_trees[0]
     out = model([tree])
-    for x in out:
+    for x in out[0]:
         assert x.item() > 0

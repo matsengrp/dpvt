@@ -1,6 +1,12 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
+from torchmetrics import AUROC
+from torchmetrics.classification import BinaryROC
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import lightning as L
 from ete3 import Tree
 
@@ -63,6 +69,11 @@ class TraverseNN(L.LightningModule):
         )
         self.encoder = nn.TransformerEncoder(self.encoder_layer, layer_count)
         self.classifier = nn.Linear(d_model, 1)
+        self.roc_metric = BinaryROC()
+        self.auroc_metric = AUROC(task="binary")
+        # Temporary storage for probabilities and targets
+        self.test_probs = []
+        self.test_targets = []
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
@@ -88,6 +99,45 @@ class TraverseNN(L.LightningModule):
         loss = F.binary_cross_entropy_with_logits(pred, yb.unsqueeze(-1))
         self.log("val_loss", loss, batch_size=len(xb))
 
+    def test_step(self, test_batch):
+        xb, yb = test_batch
+        y_pred = self(xb)
+        self.test_probs.append(y_pred.detach())
+        self.test_targets.append(yb.unsqueeze(-1).int())
+        self.auroc_metric(y_pred, yb.unsqueeze(-1).int())
+        return {}
+
+    def on_test_epoch_end(self):
+        """
+        Summarize testing statistics (AUROC and ROC) at end of testing and adds them to logging.
+        The ROC curve is added as figure to self.logger.
+        """
+        probs = torch.cat(self.test_probs, dim=0)
+        targets = torch.cat(self.test_targets, dim=0)
+
+        auroc = self.auroc_metric.compute()
+        self.log("test_auroc", auroc, on_step=False, on_epoch=True)
+
+        self.roc_metric.update(probs, targets)
+        fpr, tpr, thresholds = self.roc_metric.compute()
+
+        fig, ax = plt.subplots()
+        ax.plot(fpr, tpr, label=f"AUROC: {auroc:.2f}")
+        ax.set_xlabel("False Positive Rate")
+        ax.set_ylabel("True Positive Rate")
+        ax.set_title("ROC Curve")
+        ax.legend(loc="lower right")
+
+        if self.logger:
+            self.logger.experiment.add_figure("ROC Curve", fig, self.current_epoch)
+
+        plt.close(fig)
+
+        # Clear the stored probabilities and targets
+        self.test_probs.clear()
+        self.test_targets.clear()
+        self.roc_metric.reset()
+
     def forward(self, input, optimized=False):
         """
         Takes an iterable of ete3.Tree as input and outputs a tensor of 0's and 1's to
@@ -105,7 +155,7 @@ class TraverseNN(L.LightningModule):
                 logit = self.forward_on_tree(input)
                 return F.sigmoid(logit)
         # assume input is a list (or iterable) of trees
-        logits = torch.cat([self.forward_on_tree(item) for item in input])
+        logits = torch.stack([self.forward_on_tree(item) for item in input])
         return F.sigmoid(logits)
 
     def forward_on_tree(self, tree: Tree):
@@ -289,6 +339,61 @@ class TraverseNN(L.LightningModule):
                         (node.from_parent["edge_mutation"], -new_row)
                     )
         return None
+
+
+class TraverseMaxPooling(TraverseNN):
+    """
+    Pytorch module inherited from TraverseNN, which replaces the site aggregation
+    by taking the maximum feature of the output of the MLP for classification
+    (maximum over all sites)
+    """
+
+    def site_aggregate(self, tree):
+        """
+        Takes an encoding of the root sequence of a tree and aggregates its n_sites
+        by choosing the max entry of each feature position over all sites
+        """
+        input_features = torch.stack(
+            [
+                torch.cat(
+                    (
+                        node.to_parent["clade_mutation_feature"],
+                        node.from_parent["clade_mutation_feature"],
+                    ),
+                    dim=1,
+                )
+                for node in tree.traverse(strategy="preorder")
+            ]
+        )
+        max_values, _ = torch.max(input_features, dim=1, keepdim=True)
+        return max_values
+
+
+class TraverseAvgPooling(TraverseNN):
+    """
+    Pytorch module inherited from TraverseNN, which replaces the site aggregation
+    by taking the average of features over all sites
+    """
+
+    def site_aggregate(self, tree):
+        """
+        Takes an encoding of the root sequence of a tree and aggregates its n_sites
+        by choosing the feature of the site with max sum over all features entries
+        """
+        input_features = torch.stack(
+            [
+                torch.cat(
+                    (
+                        node.to_parent["clade_mutation_feature"],
+                        node.from_parent["clade_mutation_feature"],
+                    ),
+                    dim=1,
+                )
+                for node in tree.traverse(strategy="preorder")
+            ]
+        )
+        col_sums = input_features.mean(dim=1, keepdim=True)
+        return col_sums
 
 
 class TransformerEncoderTraversal(TraverseNN):
