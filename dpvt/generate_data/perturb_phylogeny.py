@@ -1,5 +1,5 @@
-from dpvt.generate_data.utils import Tree
-# from ete4 import Tree as ete4Tree
+from ete3 import Tree
+from dpvt.generate_data.utils import populate
 from random import randrange, choice
 from historydag.parsimony import disambiguate, parsimony_score
 
@@ -86,8 +86,7 @@ def make_random_tree(tip_subtrees):
     """
     leaf_count = len(tip_subtrees)
     tree = Tree()
-    tree.populate(leaf_count, model="uniform")
-    # tree = Tree(tree.write())
+    populate(tree, leaf_count, model="uniform")
     for old_leaf, new_leaf in zip(tree.get_leaves(), tip_subtrees):
         assert(old_leaf.up is not None)
         old_leaf.up.add_child(new_leaf)

@@ -1,9 +1,8 @@
 from ete3 import Tree
-from ete4 import Tree as ete4Tree
 from historydag.parsimony import parsimony_score
-from dpvt.scripts.perfect_phylogeny import PerfectPhylogeny
-from dpvt.scripts.perturb_phylogeny import make_worse_tree
-from dpvt.scripts.utils import newick_seq, newick_seq_random
+from dpvt.generate_data.perfect_phylogeny import PerfectPhylogeny
+from dpvt.generate_data.perturb_phylogeny import make_worse_tree
+from dpvt.generate_data.utils import newick_seq, newick_seq_random, populate
 import pandas as pd
 import numpy as np
 
@@ -25,9 +24,8 @@ def try_it():
 
     for leaf_count in [5, 10, 15, 20, 25]:
         for _ in range(tree_count):
-            tree = ete4Tree()
-            tree.populate(leaf_count, model="uniform")
-            tree = Tree(tree.write())
+            tree = Tree()
+            populate(tree, leaf_count, model="uniform")
             phylogeny_maker = PerfectPhylogeny(tree)
             tree = phylogeny_maker.make_random_phylogeny(
                 use_seq=True,
