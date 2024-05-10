@@ -31,19 +31,27 @@ If the files with best hyperparameters exist already for a given model and datas
 
 ## Training Data
 
-### Generating Perfect Phylogenies (not yet tested for correctness or completeness)
-A python class for creating perfect phylogenies given a topology is in 
-`scripts/perfect_phylogeny.py`.
+### Generating Perfect Phylogenies
+A python class for creating perfect phylogenies given a tree topology is in 
+`dpvt/generate_data/perfect_phylogeny.py`. 
 
-A command line interface is provided by `scripts/make_phylogenies.py`.
+Call the `make_phylogenies` method to generate all perfect phylogenies (with a certain 
+minimality condition) for a topology. Call the `make_random_phylogeny` method for a single 
+perfect phylogeny (the distribution currently is not uniform, see 
+`dpvt/tests/test_random_phylogenies.py`).
 
-Example usage is in `examples/generating_perfect_phylogenies`
+Example usage for generating all perfect phylogenies for a topology is in 
+`examples/generating_perfect_phylogenies/make_them.sh` Be careful, there are many 
+perfect phylogenies even for a very small topology.
 
-Be careful, there are many perfect phylogenies even for a very small topology.
+Run time is still sub-optimal. However, generating random perfect phylogenies with 25
+or so leaves is doable.
 
 ### Perturbing the phylogenies
-...coming soon...
-
+Perturbing trees is handled by `dpvt/generate_data/perturb_phylogeny.py`. See
+`examples/generating_perfect_phylogenies/perturb_random_perfect_phylogenies.py` for an
+example of generating random perfect phylogenies and perturbing them to obtain a similar 
+phylogeny, but with worse parsimony score.
 
 ### Data format
 

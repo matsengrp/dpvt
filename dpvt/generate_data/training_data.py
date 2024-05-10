@@ -8,6 +8,12 @@ from itertools import (
 import torch
 from ete3 import Tree
 from dpvt.neural_network.models import TraverseNN
+from dpvt.generate_data.utils import Tree as MyTree
+from dpvt.generate_data.perfect_phylogeny import PerfectPhylogeny
+from dpvt.generate_data.perturb_phylogeny import (
+    perturb_tree,
+    sankoff_for_missing_sequences,
+)
 
 STATES = ["A", "G", "C", "T"]
 STATE_TO_IDX = {"A": 0, "G": 1, "C": 2, "T": 3}
@@ -63,54 +69,6 @@ def reflect_tree(tree):
         if len(node.get_children()) == 2:
             node.children[0], node.children[1] = node.children[1], node.children[0]
     return reflected_tree
-
-
-"""
-1-site, 4-leaf trees
-"""
-good_template = "((0,(1,1)1)0)0;"
-"""
-      /-0
--0/-0|
-     |   /-1
-      \1|
-         \-1
-"""
-good_nwks = pattern_to_nwk_list(good_template)
-# good_nwks = [
-#     "(A,(G,G)G)A;",
-#     "(A,(C,C)C)A;",
-#     ...
-# ]
-bad_template = "((1,(1,0)0)0)0;"
-"""
-      /-1
--0/-0|
-     |   /-1
-      \0|
-         \-0
-"""
-bad_nwks = pattern_to_nwk_list(bad_template)
-# bad_nwks = [
-#     "(G,(G,A)A)A;",
-#     "(C,(C,A)A)A;",
-#     ...
-# ]
-
-
-good_trees = nwk_list_to_trees(good_nwks)
-
-bad_trees = nwk_list_to_trees(bad_nwks)
-
-neutral_template = "((0,(1,0)0)0)0;"
-"""
-      /-0
--0/-0|
-     |   /-1
-      \0|
-         \-0
-"""
-neutral_trees = nwk_list_to_trees(pattern_to_nwk_list(neutral_template))
 
 
 """
@@ -176,6 +134,54 @@ def collate_sequences(trees):
 
 
 """
+1-site, 4-leaf trees
+"""
+good_template = "((0,(1,1)1)0)0;"
+"""
+      /-0
+-0/-0|
+     |   /-1
+      \1|
+         \-1
+"""
+good_nwks = pattern_to_nwk_list(good_template)
+# good_nwks = [
+#     "(A,(G,G)G)A;",
+#     "(A,(C,C)C)A;",
+#     ...
+# ]
+bad_template = "((1,(1,0)0)0)0;"
+"""
+      /-1
+-0/-0|
+     |   /-1
+      \0|
+         \-0
+"""
+bad_nwks = pattern_to_nwk_list(bad_template)
+# bad_nwks = [
+#     "(G,(G,A)A)A;",
+#     "(C,(C,A)A)A;",
+#     ...
+# ]
+
+
+good_trees = nwk_list_to_trees(good_nwks)
+
+bad_trees = nwk_list_to_trees(bad_nwks)
+
+neutral_template = "((0,(1,0)0)0)0;"
+"""
+      /-0
+-0/-0|
+     |   /-1
+      \0|
+         \-0
+"""
+neutral_trees = nwk_list_to_trees(pattern_to_nwk_list(neutral_template))
+
+
+"""
 4-site, 4-leaf trees
 """
 
@@ -225,13 +231,47 @@ def create_site4_bad_trees(n_trees=SAMPLE_SIZE // 2, seed=None):
         trees.append(tree)
     return trees
 
-
 site4_good_trees = create_site4_good_trees(seed=seed)
-file_name = f"4site_4leaf_{SAMPLE_SIZE}good_trees_{seed}seed.pickle"
-with open(file_name, "wb") as fh:
-    pickle.dump(site4_good_trees, fh)
-
 site4_bad_trees = create_site4_bad_trees(seed=seed)
-file_name = f"4site_4leaf_{SAMPLE_SIZE}bad_trees_{seed}seed.pickle"
-with open(file_name, "wb") as fh:
-    pickle.dump(site4_bad_trees, fh)
+
+
+"""
+trees from perturbing perfect phylogenies
+"""
+
+
+def create_mixed_perfect_phylo_trees(n_leaves, n_trees, n_phylos_per_tree,):
+    """
+    Create a collection of phylogenies obtained by randomly mixing a subtree of a
+    perfect phylogeny.
+    """
+    DEPTH = 3
+    # n_phylos_per_tree = 32
+    tree_data_dict = {}
+    for _ in range(n_trees):
+        tree = MyTree()
+        tree.populate(n_leaves, model="uniform")
+        pp = PerfectPhylogeny(tree)
+        for _ in range(n_phylos_per_tree):
+            phylo = pp.make_random_phylogeny()
+            mixed_phylo = perturb_tree(phylo, depth=DEPTH, exception_on_fail=True)
+            # assert(mixed_phylo is not None)
+            sankoff_for_missing_sequences(mixed_phylo)
+            # convert custom Tree object to ete3 Tree
+            newick = mixed_phylo.write(
+                features=["sequence", "random_tree"], 
+                format_root_node=True
+            )
+            mixed_phylo = Tree(newick)
+            # add "extra" unifurcating root above previous root
+            new_tree = Tree()
+            new_tree.add_child(mixed_phylo)
+            new_tree.sequence = mixed_phylo.sequence
+            new_tree.random_tree = mixed_phylo.random_tree
+            mixed_phylo = new_tree
+            edge_classifier = [
+                1.0 if (node.random_tree and not node.is_leaf()) else 0.0
+                for node in mixed_phylo.traverse(strategy="preorder")
+            ]
+            tree_data_dict[mixed_phylo] = edge_classifier
+    return tree_data_dict
