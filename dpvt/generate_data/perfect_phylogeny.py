@@ -309,14 +309,13 @@ class PerfectPhylogeny:
             )
         )
 
-    ###better name
-
     def make_random_phylogeny(
         self,
         use_seq=True,
         use_sub=False,
         unique_leaves=False,
         sub_on_all_edges=False,
+        skip_perms=False,
     ):
         """
         Returns a random perfect phylogeny meeting the given criteria.
@@ -329,7 +328,7 @@ class PerfectPhylogeny:
                 unique_leaves=unique_leaves,
                 sub_on_all_edges=sub_on_all_edges,
                 shuffle=True,
-                skip_perms=True,
+                skip_perms=skip_perms,
             )
         )
 
