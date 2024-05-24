@@ -81,8 +81,6 @@ class TraverseNN(L.LightningModule):
 
     def masked_bce_loss(self, pred, target, mask):
         loss = F.binary_cross_entropy_with_logits(pred, target.unsqueeze(-1), reduction='none')
-        # TODO: loss and mask don't have the same dimensions, but there should be an easy fix for this!
-        # Ideally we fix it already when creating the sets (if possible)
         masked_loss = loss * mask.unsqueeze(-1) # element-wise multiplication
         return masked_loss.mean()
 
