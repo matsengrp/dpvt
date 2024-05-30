@@ -14,7 +14,11 @@ def custom_collate(items):
         items is a list of (input, output, mask), where `input` is an ete3.Tree,
         `output` is a float, and `mask` is an integer
     """
-    return [item[0] for item in items], torch.tensor([item[1] for item in items]), torch.tensor([item[2] for item in items])
+    return (
+        [item[0] for item in items],
+        torch.tensor([item[1] for item in items]),
+        torch.tensor([item[2] for item in items]),
+    )
 
 
 class Wrap:
