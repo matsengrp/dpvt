@@ -108,7 +108,6 @@ class TraverseNN(L.LightningModule):
         xb, yb, mask = test_batch
         pred = self(xb)
         # only get unmasked output
-        mask = mask.bool()
         masked_pred = pred[mask]
         masked_yb = yb[mask].unsqueeze(-1).int()
         self.test_probs.append(masked_pred.detach())
