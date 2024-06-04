@@ -80,8 +80,10 @@ class TraverseNN(L.LightningModule):
         return optimizer
 
     def masked_bce_loss(self, pred, target, mask):
-        loss = F.binary_cross_entropy_with_logits(pred, target.unsqueeze(-1), reduction='none')
-        masked_loss = loss * mask.unsqueeze(-1) # element-wise multiplication
+        loss = F.binary_cross_entropy_with_logits(
+            pred, target.unsqueeze(-1), reduction="none"
+        )
+        masked_loss = loss * mask.unsqueeze(-1)  # element-wise multiplication
         return masked_loss.mean()
 
     def training_step(self, train_batch, batch_idx):
