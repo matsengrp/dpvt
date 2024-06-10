@@ -79,10 +79,17 @@ class TraverseNN(L.LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         return optimizer
 
+    def masked_bce_loss(self, pred, target, mask):
+        loss = F.binary_cross_entropy_with_logits(
+            pred, target.unsqueeze(-1), reduction="none"
+        )
+        masked_loss = loss * mask.unsqueeze(-1)  # element-wise multiplication
+        return masked_loss.mean()
+
     def training_step(self, train_batch, batch_idx):
-        xb, yb = train_batch
+        xb, yb, mask = train_batch
         pred = torch.stack([self.forward_on_tree(item) for item in xb])
-        loss = F.binary_cross_entropy_with_logits(pred, yb.unsqueeze(-1))
+        loss = self.masked_bce_loss(pred, yb, mask)
         self.log("train_loss", loss, batch_size=len(xb), on_epoch=True)
         # log predictions on positive- and negative-datapoints, and show data in console
         # progress bar
@@ -94,23 +101,27 @@ class TraverseNN(L.LightningModule):
         return loss
 
     def validation_step(self, val_batch, batch_idx):
-        xb, yb = val_batch
+        xb, yb, mask = val_batch
         pred = torch.stack([self.forward_on_tree(item) for item in xb])
-        loss = F.binary_cross_entropy_with_logits(pred, yb.unsqueeze(-1))
+        loss = self.masked_bce_loss(pred, yb, mask)
         self.log("val_loss", loss, batch_size=len(xb))
 
     def test_step(self, test_batch):
-        xb, yb = test_batch
-        y_pred = self(xb)
-        self.test_probs.append(y_pred.detach())
-        self.test_targets.append(yb.unsqueeze(-1).int())
-        self.auroc_metric(y_pred, yb.unsqueeze(-1).int())
+        xb, yb, mask = test_batch
+        pred = self(xb)
+        # only get unmasked output
+        masked_pred = pred[mask]
+        masked_yb = yb[mask].unsqueeze(-1).int()
+        self.test_probs.append(masked_pred.detach())
+        self.test_targets.append(masked_yb)
+        if torch.numel(masked_yb) > 0:  # Check if there are any unmasked elements
+            self.auroc_metric(masked_pred, masked_yb)
         return {}
 
     def on_test_epoch_end(self):
         """
-        Summarize testing statistics (AUROC and ROC) at end of testing and adds them to logging.
-        The ROC curve is added as figure to self.logger.
+        Summarize testing statistics (AUROC and ROC) at end of testing and adds them to
+        logging. The ROC curve is added as figure to self.logger.
         """
         probs = torch.cat(self.test_probs, dim=0)
         targets = torch.cat(self.test_targets, dim=0)

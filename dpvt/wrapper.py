@@ -11,10 +11,14 @@ import json
 def custom_collate(items):
     """
     Args:
-        items is a list of (input, output) pairs, where `input` is an ete3.Tree and
-        `output` is a float
+        items is a list of (input, output, mask) tuples, where `input` is an ete3.Tree,
+        `output` is a float, and `mask` is a boolean
     """
-    return [item[0] for item in items], torch.tensor([item[1] for item in items])
+    return (
+        [item[0] for item in items],
+        torch.tensor([item[1] for item in items]),
+        torch.tensor([item[2] for item in items]),
+    )
 
 
 class Wrap:
@@ -33,7 +37,8 @@ class Wrap:
         self.log_path = log_path
         self.epochs = epochs
 
-        # If hyperparameter tuning has been done, read hyperparameters and use them from training
+        # If hyperparameter tuning has been done, read hyperparameters and use them from
+        # training
         if hyperparameter_path:
             print("Using best hyperparameters for ", log_path)
             with open(hyperparameter_path) as f:

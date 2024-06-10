@@ -1,7 +1,0 @@
-models: ["TransformerEncoderTraversal", "TraverseNN", "TraverseMaxPooling", "TraverseAvgPooling"]
-data: [
-  "FourLeaf", 
-  "FourLeafFourSite", 
-  # "TenLeaf", 
-  # "ThirtyLeaf",
-]
