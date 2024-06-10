@@ -13,25 +13,9 @@ pip install -e .
 ```
 
 
-## Training Workflow
-
-[TODO: explain how to train using `dpvt-experiments-1` repo, or move README explanation to that repo]
-
-We have a workflow implemented in Snakemake (`Snakefile`), which takes as input in `config.yaml` names of models (see *Neural Network Model*) and datasets (see *Training Data*) and trains and evaluates the given models on all given datasets.
-
-To execute the workflow, run `snakemake -c[num_cores]` in the directory `dpvt/train`, where `[num_cores]` should be replaced with the number of cores you want to use.
-Alternatively, run `snakemake --snakefile dpvt/train/Snakefile -c[num_cores]` in the root directory, or from any directory with the `--snakefile` path argument replaced as appropriate.
-
-
-### Hyperparameter Optimization
-
-By default, running the workflow with Snakemake will perform hyperparameter tuning with optuna for all models and datasets.
-All models tested are saved in `hyper_checkpoints/`, which also contains `json` files with the best hyperparameters.
-These are then used for model training.
-If the files with best hyperparameters exist already for a given model and dataset, running the workflow will skip hyperparameter tuning.
-
-
 ## Training Data
+
+Currently, datasets are stored in the `dpvt-experiments-1` repository.
 
 ### Data format
 
