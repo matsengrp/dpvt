@@ -25,7 +25,7 @@ def create_training_data(n_trees, n_phylos_per_tree, n_leaves, tree_depth):
             phylo = pp.make_random_phylogeny()
             mixed_phylo = perturb_tree(phylo, depth=tree_depth, exception_on_fail=True)
             # assert(mixed_phylo is not None)
-            # apply sankoff algorithm to get sequences on internal nodes
+            # generate sequences on internal nodes
             sankoff_for_missing_sequences(mixed_phylo)
             # add "extra" unifurcating root above previous root
             new_tree = Tree()
@@ -40,8 +40,8 @@ def create_training_data(n_trees, n_phylos_per_tree, n_leaves, tree_depth):
             tree_data_dict[mixed_phylo] = edge_classifier
     return tree_data_dict
 
-N_LEAVES = 5
-DEPTH = 2
+N_LEAVES = 30
+DEPTH = 4
 def main():
     data_dict = create_training_data(
         n_trees=32, 
