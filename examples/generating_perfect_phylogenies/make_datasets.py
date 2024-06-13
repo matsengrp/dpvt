@@ -43,20 +43,7 @@ def create_training_data(n_trees, n_leaves):
                 for node in mixed_phylo.traverse(strategy="preorder")
             ]
             tree_data_dict[mixed_phylo] = edge_classifier
-    # shuffle keys and make train / validation split 
-    num_items = n_trees * n_phylos_per_tree
-    num_train = int(num_items * 0.8)
-
-    keys = list(tree_data_dict.keys())
-    random_idx = torch.randperm(num_items)
-    train_keys = [keys[i] for i in random_idx[:num_train]]
-    val_keys = [keys[i] for i in random_idx[num_train:]]
-
-    train_data = {key: tree_data_dict[key] for key in train_keys}
-    val_data = {key: tree_data_dict[key] for key in val_keys}
-
-    data_dict = {"train": train_data, "val": val_data}
-    return data_dict
+    return tree_data_dict
 
 N_LEAVES = 30
 def main():
