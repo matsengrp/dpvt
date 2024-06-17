@@ -1,5 +1,5 @@
 import pickle
-import torch
+# import torch
 from ete3 import Tree
 
 from dpvt.generate_data.utils import populate
@@ -44,12 +44,12 @@ N_LEAVES = 30
 DEPTH = 4
 def main():
     data_dict = create_training_data(
-        n_trees=32, 
-        n_phylos_per_tree=32,
+        n_trees=1024, 
+        n_phylos_per_tree=1,
         n_leaves=N_LEAVES,
         tree_depth=DEPTH,
     )
-    file_path=f"{N_LEAVES}leaf_perfect.p"
+    file_path=f"{N_LEAVES}leaf_perfect_distinct_trees.p"
     with open(file_path, "wb") as fh:
         pickle.dump(data_dict, file=fh)
 
