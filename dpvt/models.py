@@ -239,7 +239,6 @@ class TraverseNN(L.LightningModule):
         first_node_feature,
         second_node_mutations,
         second_node_feature,
-        site_idx,
         symmetrize=False,
     ):
         """
@@ -286,24 +285,22 @@ class TraverseNN(L.LightningModule):
                     for i in range(seq_length):
                         learned_features[current_node][i][i_dir] = (
                             self.traverse_node_aggregate(
-                                mutations[int(node[0])].squeeze(),
+                                mutations[int(node[0])][i],
                                 learned_features[int(node[0])][i][i_dir],
-                                mutations[int(node[1])].squeeze(),
+                                mutations[int(node[1])][i],
                                 learned_features[int(node[1])][i][i_dir],
-                                site_idx=i,
                             )
                         )
                 else:
                     for i in range(seq_length):
                         learned_features[current_node][i][i_dir] = (
                             self.traverse_node_aggregate(
-                                mutations[int(node[0])].squeeze(),
+                                mutations[int(node[0])][i],
                                 learned_features[int(node[0])][i][
                                     0
                                 ],  # feature for sibling taken from upwards traversal
-                                mutations[int(node[1])].squeeze(),
+                                mutations[int(node[1])][i],
                                 learned_features[int(node[1])][i][i_dir],
-                                site_idx=i,
                             )
                         )
             i_dir += 1
