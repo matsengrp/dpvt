@@ -1,11 +1,19 @@
 import torch
 from torch.utils.data import DataLoader
+import torch.nn.functional as F
 import lightning as L
 from pytorch_lightning.loggers import TensorBoardLogger
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
+from torch.utils.data import Dataset
+from ete3 import Tree
 
 import optuna
 import json
+
+# DNA states
+STATES = ["A", "G", "C", "T"]
+STATE_TO_IDX = {"A": 0, "G": 1, "C": 2, "T": 3}
+n_states = len(STATES)
 
 
 def custom_collate(items):
@@ -14,11 +22,134 @@ def custom_collate(items):
         items is a list of (input, output, mask) tuples, where `input` is an ete3.Tree,
         `output` is a float, and `mask` is a boolean
     """
-    return (
-        [item[0] for item in items],
-        torch.tensor([item[1] for item in items]),
-        torch.tensor([item[2] for item in items]),
-    )
+    if type(items[0][0]) == Tree:
+        return (
+            [item[0] for item in items],
+            torch.tensor([item[1] for item in items]),
+            torch.tensor([item[2] for item in items]),
+        )
+    else:
+        return (
+            torch.stack([item[0] for item in items]),
+            torch.stack([item[1] for item in items]),
+            torch.tensor([item[2] for item in items]),
+            torch.tensor([item[3] for item in items]),
+        )
+
+
+class TreeDataset(Dataset):
+    def __init__(self, data, labels, mask):
+        self.data = data
+        self.labels = labels
+        self.mask = mask
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return self.data[idx], self.labels[idx], self.mask[idx]
+
+
+class TraversalDataset(Dataset):
+    """Dataset where trees and mutations on trees are encoded as tensors.
+    The tensor `traversal` for contains for each tree all triples
+    (child1, child2, int_node) and all triples (sibling, parent, int_node)
+    for every internal node int_node that is below an internal edge.
+    Mutations are encoded by tensors of length 4 for each site with
+    entries 0,1, and -1 where -1 indicated the base that has been lost
+    from parent and 1 the base it mutated to. The bases are ordered
+    A,G,C,T. E.g. (1,0,-1,0) indicates mutation C -> A.
+    Labels indicate edges that are MP (0) vs non-MP (1) and mask
+    contains boolean values indicating whether edges are adjacent to
+    leaves"""
+
+    def __init__(self, trees, labels, mask):
+        self.traversal, self.mutations = self.get_tensor_representation(trees)
+        self.labels = labels
+        self.mask = mask
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        return (
+            self.traversal[idx],
+            self.mutations[idx],
+            self.labels[idx],
+            self.mask[idx],
+        )
+
+    def get_tensor_representation(self, trees):
+        max_n_sites = max([len(tree.sequence) for tree in trees])
+        max_n_int_nodes = max([len(tree) - 2 for tree in trees])
+        mutations = torch.empty(
+            len(trees), len(list(trees[0].traverse())), max_n_sites, 4
+        )
+        mutations.fill_(-1)  # pad with -1 so we can distinguish padding
+        # from actual 0 entries representing no mutation
+        traversal = torch.empty(len(trees), 2, max_n_int_nodes, 3)
+        traversal.fill_(-1)
+        tree_index = 0
+        # child and parent index in traversal
+        for tree in trees:
+            node_index_dict = {}  # save index for every node to easily find
+            # upward traversal (preorder)
+            node_index = 0  # this gives different indexing to above bc of prostorder!
+            node_in_tensor_index = 0
+            for node in tree.traverse("postorder"):
+                node_index_dict[node] = node_index
+                if not (node.is_leaf() or node.is_root() or node.up.is_root()):
+                    children = node.get_children()
+                    traversal[tree_index, 0, node_in_tensor_index, :] = torch.tensor(
+                        [
+                            node_index_dict[children[0]],
+                            node_index_dict[children[1]],
+                            node_index,
+                        ]
+                    )
+                    node_in_tensor_index += 1
+                node_index += 1
+
+            node_in_traversal_index = 0
+            node_in_mutations_index = 0
+            n_sites = len(tree.sequence)
+            # downward traversal to assign mutations and traversal
+            for node in tree.traverse("preorder"):
+                # fill downward traversal (preorder) entries
+                if not (node.is_leaf() or node.is_root() or node.up.is_root()):
+                    traversal[tree_index, 1, node_in_traversal_index, :] = torch.tensor(
+                        [
+                            node_index_dict[node.get_sisters()[0]],
+                            node_index_dict[node.up],
+                            node_index_dict[node],
+                        ]
+                    )
+                    node_in_traversal_index += 1
+                for site_index in range(n_sites):
+                    mutations[tree_index, node_in_mutations_index, site_index, :] = 0.0
+                    if node.up is None:  # node is root
+                        pass
+                    else:  # non-root node
+                        n_seq = node.sequence[site_index]
+                        p_seq = node.up.sequence[site_index]
+                        try:
+                            mutations[
+                                tree_index,
+                                node_in_mutations_index,
+                                site_index,
+                                STATE_TO_IDX[n_seq],
+                            ] += 1
+                            mutations[
+                                tree_index,
+                                node_in_mutations_index,
+                                site_index,
+                                STATE_TO_IDX[p_seq],
+                            ] -= 1
+                        except KeyError:
+                            raise ValueError(f"Each node sequence must be in {STATES}")
+                node_in_mutations_index += 1
+            tree_index += 1
+        return traversal, mutations
 
 
 class Wrap:
