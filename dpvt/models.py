@@ -89,10 +89,24 @@ class TraverseNN(L.LightningModule):
         return masked_loss.mean()
 
     def training_step(self, train_batch, batch_idx):
-        xb, yb, mask = train_batch
-        pred = torch.stack([self.forward_on_tree(item) for item in xb])
+        if type(train_batch[0][0]) == Tree:
+            xb, yb, mask = train_batch
+            fw_output = [self.forward_on_tree(item) for item in xb]
+
+        else:
+            traversal, mutations, yb, mask = train_batch
+            fw_output = [
+                self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
+            ]
+
+        max_length = max([i.size(0) for i in fw_output])
+        padded_fw_output = [
+            F.pad(l, (0, 0, 0, max_length - l.size(0))) for l in fw_output
+        ]
+        pred = torch.stack(padded_fw_output)
         loss = self.masked_bce_loss(pred, yb, mask)
-        self.log("train_loss", loss, batch_size=len(xb), on_epoch=True)
+        self.log("train_loss", loss, batch_size=len(train_batch[0]), on_epoch=True)
+        self.logger.experiment.add_scalars("loss", {"train": loss}, self.global_step)
         # log predictions on positive- and negative-datapoints, and show data in console
         # progress bar
         prob_predictions = F.sigmoid(pred)
@@ -103,14 +117,39 @@ class TraverseNN(L.LightningModule):
         return loss
 
     def validation_step(self, val_batch, batch_idx):
-        xb, yb, mask = val_batch
-        pred = torch.stack([self.forward_on_tree(item) for item in xb])
+        if type(val_batch[0][0]) == Tree:
+            xb, yb, mask = val_batch
+            fw_output = [self.forward_on_tree(item) for item in xb]
+        else:
+            traversal, mutations, yb, mask = val_batch
+            fw_output = [
+                self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
+            ]
+
+        max_length = max([i.size(0) for i in fw_output])
+        padded_fw_output = [
+            F.pad(l, (0, 0, 0, max_length - l.size(0))) for l in fw_output
+        ]
+        pred = torch.stack(padded_fw_output)
         loss = self.masked_bce_loss(pred, yb, mask)
-        self.log("val_loss", loss, batch_size=len(xb))
+        self.log("val_loss", loss, batch_size=len(val_batch[0]))
+        self.logger.experiment.add_scalars("loss", {"valid": loss}, self.global_step)
 
     def test_step(self, test_batch):
-        xb, yb, mask = test_batch
-        pred = self(xb)
+        if type(test_batch[0][0]) == Tree:
+            xb, yb, mask = test_batch
+            fw_output = [self.forward_on_tree(item) for item in xb]
+
+        else:
+            traversal, mutations, yb, mask = test_batch
+            fw_output = [
+                self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
+            ]
+        max_length = max([i.size(0) for i in fw_output])
+        padded_fw_output = [
+            F.pad(l, (0, 0, 0, max_length - l.size(0))) for l in fw_output
+        ]
+        pred = torch.stack(padded_fw_output)
         # only get unmasked output
         masked_pred = pred[mask]
         masked_yb = yb[mask].unsqueeze(-1).int()
@@ -172,7 +211,10 @@ class TraverseNN(L.LightningModule):
                 logit = self.forward_on_tree(input)
                 return F.sigmoid(logit)
         # assume input is a list (or iterable) of trees
-        logits = torch.stack([self.forward_on_tree(item) for item in input])
+        if type(input[0]) == Tree:
+            logits = torch.stack([self.forward_on_tree(item) for item in input])
+        else:
+            logits = torch.stack([self.forward_on_traversal(item) for item in input])
         return F.sigmoid(logits)
 
     def forward_on_tree(self, tree: Tree):
@@ -188,6 +230,88 @@ class TraverseNN(L.LightningModule):
         self.compute_features_via_traversal(tree, len(tree.sequence))
         encoder_output = self.site_aggregate(tree)
         # encoder_output dim = (n_nodes, 1, 8)
+        logit = self.classifier(encoder_output[:, 0])
+        return logit
+
+    def traverse_node_aggregate(
+        self,
+        first_node_mutations,
+        first_node_feature,
+        second_node_mutations,
+        second_node_feature,
+        site_idx,
+        symmetrize=False,
+    ):
+        """
+        Takes in dictionaries of feature vectors from two neighbor-nodes of a given
+        node, and outputs the `clade_mutation_feature` vector for that node.
+        The two neighbor-nodes can be either:
+            - two children of a node, during root-ward traversal, or
+            - one parent and one sister of a node, during leaf-ward traversal.
+        """
+        first_data = torch.cat(
+            (
+                first_node_mutations,
+                first_node_feature,
+            ),
+            dim=0,
+        )
+        second_data = torch.cat(
+            (
+                second_node_mutations,
+                second_node_feature,
+            ),
+            dim=0,
+        )
+        combined_data = torch.cat((first_data, second_data))
+        output = self.traverse_stack(combined_data)
+        if symmetrize:
+            output += self.traverse_stack(torch.cat((first_data, second_data)))
+        return output
+
+    def forward_on_traversal(self, traversal, mutations):
+        # compute features from traversal
+        # assumes input traversal and mutations encode one tree
+        seq_length = mutations.size(2)
+        input_dict = {}
+        # for each node, we learn 2 features for each site. Features have length
+        # d_out_traverse
+        learned_features = torch.zeros(len(mutations), seq_length, 2, d_out_traverse)
+        i_dir = 0
+        for direction in traversal:  # upward vs downward
+            for node in direction:  # internal nodes that need features for edges
+                current_node = int(node[2])
+                input_dict[current_node] = {}
+                if i_dir == 0:
+                    for i in range(seq_length):
+                        learned_features[current_node][i][i_dir] = (
+                            self.traverse_node_aggregate(
+                                mutations[int(node[0])].squeeze(),
+                                learned_features[int(node[0])][i][i_dir],
+                                mutations[int(node[1])].squeeze(),
+                                learned_features[int(node[1])][i][i_dir],
+                                site_idx=i,
+                            )
+                        )
+                else:
+                    for i in range(seq_length):
+                        learned_features[current_node][i][i_dir] = (
+                            self.traverse_node_aggregate(
+                                mutations[int(node[0])].squeeze(),
+                                learned_features[int(node[0])][i][
+                                    0
+                                ],  # feature for sibling taken from upwards traversal
+                                mutations[int(node[1])].squeeze(),
+                                learned_features[int(node[1])][i][i_dir],
+                                site_idx=i,
+                            )
+                        )
+            i_dir += 1
+        # concatenate features to one dimension
+        learned_features = learned_features.reshape(
+            len(mutations), seq_length, 2 * d_out_traverse
+        )
+        encoder_output = self.encoder(learned_features)
         logit = self.classifier(encoder_output[:, 0])
         return logit
 
