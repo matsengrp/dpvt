@@ -38,16 +38,28 @@ def custom_collate(items):
 
 
 class TreeDataset(Dataset):
-    def __init__(self, data, labels, mask):
+    def __init__(self, data, labels):
         self.data = data
         self.labels = labels
-        self.mask = mask
+        self.mask = self.mask_pendant_edges(data)
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
         return self.data[idx], self.labels[idx], self.mask[idx]
+    
+    def mask_pendant_edges(trees):
+        masks = []
+        for tree in trees:
+            # mask leaves, root (which is leaf) and root (which contains data for edge
+            # leading to root leaf)
+            mask_list = [
+                not (node.is_leaf() or node.is_root() or node.up.is_root())
+                for node in tree.traverse("postorder")
+            ]
+            masks.append(mask_list)
+        return masks
 
 
 class TraversalDataset(Dataset):
@@ -111,7 +123,6 @@ class TraversalDataset(Dataset):
                 node_index += 1
 
             node_in_traversal_index = 0
-            node_in_mutations_index = 0
             n_sites = len(tree.sequence)
             # downward traversal to assign mutations and traversal
             for node in tree.traverse("preorder"):
@@ -126,7 +137,7 @@ class TraversalDataset(Dataset):
                     )
                     node_in_traversal_index += 1
                 for site_index in range(n_sites):
-                    mutations[tree_index, node_in_mutations_index, site_index, :] = 0.0
+                    mutations[tree_index, node_index_dict[node], site_index, :] = 0.0
                     if node.up is None:  # node is root
                         pass
                     else:  # non-root node
@@ -135,19 +146,18 @@ class TraversalDataset(Dataset):
                         try:
                             mutations[
                                 tree_index,
-                                node_in_mutations_index,
+                                node_index_dict[node],
                                 site_index,
                                 STATE_TO_IDX[n_seq],
                             ] += 1
                             mutations[
                                 tree_index,
-                                node_in_mutations_index,
+                                node_index_dict[node],
                                 site_index,
                                 STATE_TO_IDX[p_seq],
                             ] -= 1
                         except KeyError:
                             raise ValueError(f"Each node sequence must be in {STATES}")
-                node_in_mutations_index += 1
             tree_index += 1
         return traversal, mutations
 
