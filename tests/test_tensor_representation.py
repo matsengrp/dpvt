@@ -72,24 +72,24 @@ def test_get_mutations():
     num_sites = len(trees[0].sequence)
     expected_mutations = torch.zeros(num_trees, num_nodes, num_sites, 4)
     # first tree
-    expected_mutations[0, 2, 0, 1] = -1
-    expected_mutations[0, 2, 0, 2] = 1
-    expected_mutations[0, 3, 1, 0] = 1
-    expected_mutations[0, 3, 1, 1] = -1
-    expected_mutations[0, 4, 0, 0] = 1
-    expected_mutations[0, 4, 0, 2] = -1
-    expected_mutations[0, 7, 0, 1] = -1
-    expected_mutations[0, 7, 0, 3] = 1
+    expected_mutations[0, 0, 0, 0] = 1
+    expected_mutations[0, 0, 0, 2] = -1
+    expected_mutations[0, 2, 1, 0] = 1
+    expected_mutations[0, 2, 1, 1] = -1
+    expected_mutations[0, 4, 0, 1] = -1
+    expected_mutations[0, 4, 0, 2] = 1
+    expected_mutations[0, 5, 0, 1] = -1
+    expected_mutations[0, 5, 0, 3] = 1
 
     # 2nd tree
+    expected_mutations[1, 0, 0, 0] = 1
+    expected_mutations[1, 0, 0, 2] = -1
     expected_mutations[1, 2, 1, 0] = 1
     expected_mutations[1, 2, 1, 1] = -1
-    expected_mutations[1, 3, 0, 0] = 1
-    expected_mutations[1, 3, 0, 2] = -1
+    expected_mutations[1, 3, 0, 1] = -1
+    expected_mutations[1, 3, 0, 3] = 1
     expected_mutations[1, 5, 0, 1] = 1
     expected_mutations[1, 5, 0, 2] = -1
-    expected_mutations[1, 6, 0, 1] = -1
-    expected_mutations[1, 6, 0, 3] = 1
     assert torch.equal(expected_mutations, mutations)
 
 
