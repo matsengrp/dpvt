@@ -98,7 +98,7 @@ class TraverseNN(L.LightningModule):
             fw_output = [
                 self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
             ]
-
+        # padding if trees have varying number of leaves
         max_length = max([i.size(0) for i in fw_output])
         padded_fw_output = [
             F.pad(l, (0, 0, 0, max_length - l.size(0))) for l in fw_output
@@ -125,7 +125,7 @@ class TraverseNN(L.LightningModule):
             fw_output = [
                 self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
             ]
-
+        # padding if trees have varying number of leaves
         max_length = max([i.size(0) for i in fw_output])
         padded_fw_output = [
             F.pad(l, (0, 0, 0, max_length - l.size(0))) for l in fw_output
@@ -145,6 +145,7 @@ class TraverseNN(L.LightningModule):
             fw_output = [
                 self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
             ]
+        # padding if trees have varying number of leaves
         max_length = max([i.size(0) for i in fw_output])
         padded_fw_output = [
             F.pad(l, (0, 0, 0, max_length - l.size(0))) for l in fw_output
@@ -271,7 +272,7 @@ class TraverseNN(L.LightningModule):
     def forward_on_traversal(self, traversal, mutations):
         # compute features from traversal
         # assumes input traversal and mutations encode one tree
-        seq_length = mutations.size(2)
+        seq_length = mutations.size(1)
         input_dict = {}
         # for each node, we learn 2 features for each site. Features have length
         # d_out_traverse
@@ -280,27 +281,29 @@ class TraverseNN(L.LightningModule):
         for direction in traversal:  # upward vs downward
             for node in direction:  # internal nodes that need features for edges
                 current_node = int(node[2])
+                child1 = int(node[0])
+                child2 = int(node[1])
                 input_dict[current_node] = {}
-                if i_dir == 0:
+                if i_dir == 0:  # upward traversal
                     for i in range(seq_length):
                         learned_features[current_node][i][i_dir] = (
                             self.traverse_node_aggregate(
-                                mutations[int(node[0])][i],
-                                learned_features[int(node[0])][i][i_dir],
-                                mutations[int(node[1])][i],
-                                learned_features[int(node[1])][i][i_dir],
+                                mutations[child1][i],
+                                learned_features[child1][i][i_dir],
+                                mutations[child1][i],
+                                learned_features[child1][i][i_dir],
                             )
                         )
                 else:
                     for i in range(seq_length):
                         learned_features[current_node][i][i_dir] = (
                             self.traverse_node_aggregate(
-                                mutations[int(node[0])][i],
-                                learned_features[int(node[0])][i][
+                                mutations[child1][i],
+                                learned_features[child1][i][
                                     0
                                 ],  # feature for sibling taken from upwards traversal
-                                mutations[int(node[1])][i],
-                                learned_features[int(node[1])][i][i_dir],
+                                mutations[child2][i],
+                                learned_features[child2][i][i_dir],
                             )
                         )
             i_dir += 1
