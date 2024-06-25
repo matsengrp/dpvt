@@ -64,54 +64,53 @@ def trees_rooted_at_outgroup():
 def test_get_mutations():
     trees = trees_rooted_at_outgroup()
     labels = []
-    masks = []
-    traversal_data = TraversalDataset(trees, labels, masks)
+    traversal_data = TraversalDataset(trees, labels)
     mutations = traversal_data.mutations
     num_trees = len(trees)
     num_nodes = len(list(trees[0].traverse()))
     num_sites = len(trees[0].sequence)
     expected_mutations = torch.zeros(num_trees, num_nodes, num_sites, 4)
     # first tree
-    expected_mutations[0, 0, 0, 0] = 1
-    expected_mutations[0, 0, 0, 2] = -1
-    expected_mutations[0, 2, 1, 0] = 1
-    expected_mutations[0, 2, 1, 1] = -1
-    expected_mutations[0, 4, 0, 1] = -1
-    expected_mutations[0, 4, 0, 2] = 1
-    expected_mutations[0, 5, 0, 1] = -1
-    expected_mutations[0, 5, 0, 3] = 1
+    expected_mutations[0, 2, 0, 1] = -1
+    expected_mutations[0, 2, 0, 2] = 1
+    expected_mutations[0, 3, 1, 0] = 1
+    expected_mutations[0, 3, 1, 1] = -1
+    expected_mutations[0, 4, 0, 0] = 1
+    expected_mutations[0, 4, 0, 2] = -1
+    expected_mutations[0, 7, 0, 1] = -1
+    expected_mutations[0, 7, 0, 3] = 1
 
     # 2nd tree
-    expected_mutations[1, 0, 0, 0] = 1
-    expected_mutations[1, 0, 0, 2] = -1
     expected_mutations[1, 2, 1, 0] = 1
     expected_mutations[1, 2, 1, 1] = -1
-    expected_mutations[1, 3, 0, 1] = -1
-    expected_mutations[1, 3, 0, 3] = 1
+    expected_mutations[1, 3, 0, 0] = 1
+    expected_mutations[1, 3, 0, 2] = -1
     expected_mutations[1, 5, 0, 1] = 1
     expected_mutations[1, 5, 0, 2] = -1
+    expected_mutations[1, 6, 0, 1] = -1
+    expected_mutations[1, 6, 0, 3] = 1
     assert torch.equal(expected_mutations, mutations)
 
 
 def test_get_traversal():
     trees = trees_rooted_at_outgroup()
     labels = []
-    masks = []
-    traversal_data = TraversalDataset(trees, labels, masks)
+    traversal_data = TraversalDataset(trees, labels)
     traversal = traversal_data.traversal
     num_trees = len(trees)
-    expected_traversal = torch.zeros(num_trees, 2, len(trees[0]) - 2, 3)
+    num_int_nodes = len(trees[0]) - 2
+    expected_traversal = torch.zeros(num_trees, 2, num_int_nodes, 3)
     # first tree
-    expected_traversal[0, 0, 0, :] = torch.tensor([0, 1, 2])
-    expected_traversal[0, 0, 1, :] = torch.tensor([2, 3, 4])
-    expected_traversal[0, 1, 0, :] = torch.tensor([5, 6, 4])
-    expected_traversal[0, 1, 1, :] = torch.tensor([3, 4, 2])
+    expected_traversal[0, 0, 0, :] = torch.tensor([4, 5, 3])
+    expected_traversal[0, 0, 1, :] = torch.tensor([3, 6, 2])
+    expected_traversal[0, 1, 0, :] = torch.tensor([7, 1, 2])
+    expected_traversal[0, 1, 1, :] = torch.tensor([6, 2, 3])
 
     # 2nd tree
-    expected_traversal[1, 0, 0, :] = torch.tensor([0, 1, 2])
-    expected_traversal[1, 0, 1, :] = torch.tensor([3, 4, 5])
-    expected_traversal[1, 1, 0, :] = torch.tensor([5, 6, 2])
-    expected_traversal[1, 1, 1, :] = torch.tensor([2, 6, 5])
+    expected_traversal[1, 0, 0, :] = torch.tensor([3, 4, 2])
+    expected_traversal[1, 0, 1, :] = torch.tensor([6, 7, 5])
+    expected_traversal[1, 1, 0, :] = torch.tensor([5, 1, 2])
+    expected_traversal[1, 1, 1, :] = torch.tensor([2, 1, 5])
 
     print("Expected:")
     print(expected_traversal)

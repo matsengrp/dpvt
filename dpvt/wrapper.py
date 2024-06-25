@@ -48,15 +48,15 @@ class TreeDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.data[idx], self.labels[idx], self.mask[idx]
-    
-    def mask_pendant_edges(trees):
+
+    def mask_pendant_edges(self, trees):
         masks = []
         for tree in trees:
             # mask leaves, root (which is leaf) and root (which contains data for edge
             # leading to root leaf)
             mask_list = [
                 not (node.is_leaf() or node.is_root() or node.up.is_root())
-                for node in tree.traverse("postorder")
+                for node in tree.traverse("preorder")
             ]
             masks.append(mask_list)
         return masks
@@ -75,10 +75,10 @@ class TraversalDataset(Dataset):
     contains boolean values indicating whether edges are adjacent to
     leaves"""
 
-    def __init__(self, trees, labels, mask):
+    def __init__(self, trees, labels):
         self.traversal, self.mutations = self.get_tensor_representation(trees)
         self.labels = labels
-        self.mask = mask
+        self.mask = self.mask_pendant_edges(trees)
 
     def __len__(self):
         return len(self.labels)
@@ -104,23 +104,24 @@ class TraversalDataset(Dataset):
         tree_index = 0
         # child and parent index in traversal
         for tree in trees:
-            node_index_dict = {}  # save index for every node to easily find
-            # upward traversal (preorder)
-            node_index = 0  # this gives different indexing to above bc of prostorder!
+            node_index_dict = {
+                node: index
+                for (node, index) in zip(
+                    tree.traverse("preorder"), range(len(list(tree.traverse())))
+                )
+            }  # save index for every node (preorder) to easily find it in traversals
             node_in_tensor_index = 0
             for node in tree.traverse("postorder"):
-                node_index_dict[node] = node_index
                 if not (node.is_leaf() or node.is_root() or node.up.is_root()):
                     children = node.get_children()
                     traversal[tree_index, 0, node_in_tensor_index, :] = torch.tensor(
                         [
                             node_index_dict[children[0]],
                             node_index_dict[children[1]],
-                            node_index,
+                            node_index_dict[node],
                         ]
                     )
                     node_in_tensor_index += 1
-                node_index += 1
 
             node_in_traversal_index = 0
             n_sites = len(tree.sequence)
@@ -160,6 +161,18 @@ class TraversalDataset(Dataset):
                             raise ValueError(f"Each node sequence must be in {STATES}")
             tree_index += 1
         return traversal, mutations
+
+    def mask_pendant_edges(self, trees):
+        masks = []
+        for tree in trees:
+            # mask leaves, root (which is leaf) and root (which contains data for edge
+            # leading to root leaf)
+            mask_list = [
+                not (node.is_leaf() or node.is_root() or node.up.is_root())
+                for node in tree.traverse("preorder")
+            ]
+            masks.append(mask_list)
+        return masks
 
 
 class Wrap:
