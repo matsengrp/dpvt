@@ -92,7 +92,6 @@ class TraverseNN(L.LightningModule):
         if type(train_batch[0][0]) == Tree:
             xb, yb, mask = train_batch
             fw_output = [self.forward_on_tree(item) for item in xb]
-
         else:
             traversal, mutations, yb, mask = train_batch
             fw_output = [
@@ -243,8 +242,8 @@ class TraverseNN(L.LightningModule):
         symmetrize=False,
     ):
         """
-        Takes in dictionaries of feature vectors from two neighbor-nodes of a given
-        node, and outputs the `clade_mutation_feature` vector for that node.
+        Takes in feature vectors from two neighbor-nodes of a given node, and outputs
+        the feature vector for that node.
         The two neighbor-nodes can be either:
             - two children of a node, during root-ward traversal, or
             - one parent and one sister of a node, during leaf-ward traversal.
@@ -270,12 +269,14 @@ class TraverseNN(L.LightningModule):
         return output
 
     def forward_on_traversal(self, traversal, mutations):
-        # compute features from traversal
-        # assumes input traversal and mutations encode one tree
+        """
+        Compute features from traversal datastructure, given one tree/traversal
+        and corresponding mutations (for all sites).
+        """
         seq_length = mutations.size(1)
         input_dict = {}
-        # for each node, we learn 2 features for each site. Features have length
-        # d_out_traverse
+        # for each node, we learn 2 features for each site (up and down)
+        # Features have length d_out_traverse
         learned_features = torch.zeros(len(mutations), seq_length, 2, d_out_traverse)
         i_dir = 0
         for direction in traversal:  # upward vs downward
@@ -290,8 +291,8 @@ class TraverseNN(L.LightningModule):
                             self.traverse_node_aggregate(
                                 mutations[child1][i],
                                 learned_features[child1][i][i_dir],
-                                mutations[child1][i],
-                                learned_features[child1][i][i_dir],
+                                mutations[child2][i],
+                                learned_features[child2][i][i_dir],
                             )
                         )
                 else:
