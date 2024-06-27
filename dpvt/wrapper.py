@@ -22,6 +22,10 @@ def custom_collate(items):
 
 
 class Wrap:
+    """
+    A class for wrapping a neural network model and a dataset.
+    """
+
     def __init__(
         self,
         train_data,
@@ -50,7 +54,12 @@ class Wrap:
             # Initialize model with specified parameters
             self.batch_size = batch_size
             self.learning_rate = learning_rate
-        self.model = model(self.learning_rate)
+        if isinstance(model, type):
+            # `model` is a class
+            self.model = model(self.learning_rate)
+        else:
+            # `model` is an instance of a class
+            self.model = model
 
         self.train_loader = DataLoader(
             train_data, batch_size=self.batch_size, collate_fn=custom_collate
