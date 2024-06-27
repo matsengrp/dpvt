@@ -32,8 +32,8 @@ def custom_collate(items):
         return (
             torch.stack([item[0] for item in items]),
             torch.stack([item[1] for item in items]),
-            torch.tensor([item[2] for item in items]),
-            torch.tensor([item[3] for item in items]),
+            torch.stack([item[2] for item in items]),
+            torch.stack([item[3] for item in items]),
         )
 
 
@@ -75,20 +75,26 @@ class TraversalDataset(Dataset):
     contains boolean values indicating whether edges are adjacent to
     leaves"""
 
-    def __init__(self, trees, labels):
+    def __init__(self, trees, labels, device):
         self.traversal, self.mutations = self.get_tensor_representation(trees)
         self.labels = labels
         self.mask = self.mask_pendant_edges(trees)
+        self.device = device
 
     def __len__(self):
         return len(self.labels)
 
     def __getitem__(self, idx):
+        device = self.device
+        traversal = self.traversal[idx].to(device)
+        mutations = self.mutations[idx].to(device)
+        labels = torch.tensor(self.labels[idx]).to(device)
+        mask = torch.tensor(self.mask[idx]).to(device)
         return (
-            self.traversal[idx],
-            self.mutations[idx],
-            self.labels[idx],
-            self.mask[idx],
+            traversal,
+            mutations,
+            labels,
+            mask,
         )
 
     def get_tensor_representation(self, trees):
@@ -187,6 +193,7 @@ class Wrap:
         test_data,
         model,
         log_path,
+        device="cpu",
         batch_size=1024,
         learning_rate=0.005,
         epochs=200,
@@ -194,6 +201,7 @@ class Wrap:
     ):
         self.log_path = log_path
         self.epochs = epochs
+        self.device = device
 
         # If hyperparameter tuning has been done, read hyperparameters and use them from
         # training
@@ -234,6 +242,8 @@ class Wrap:
             mode="min",  # Stop training when the quantity monitored has stopped decreasing
         )
         self.trainer = L.Trainer(
+            accelerator=self.device,
+            devices=1,
             logger=logger,
             max_epochs=self.epochs,
             log_every_n_steps=1,
@@ -263,6 +273,7 @@ class HyperWrap:
         train_data,
         val_data,
         log_path,
+        device="cpu",
         epochs=200,
         n_trials=10,
         checkpoint_dir="hyper_checkpoints/",
@@ -271,6 +282,7 @@ class HyperWrap:
         self.train_data = train_data
         self.val_data = val_data
         self.log_path = log_path
+        self.device = device
         self.epochs = epochs
         self.n_trials = n_trials
         self.checkpoint_dir = checkpoint_dir
@@ -302,6 +314,8 @@ class HyperWrap:
             mode="min",  # Stop training when the quantity monitored has stopped decreasing
         )
         trainer = L.Trainer(
+            accelerator=self.device,
+            devices=1,
             logger=logger,
             max_epochs=self.epochs,
             callbacks=[checkpoint_callback, early_stop_callback],

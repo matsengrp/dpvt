@@ -176,6 +176,8 @@ class TraverseNN(L.LightningModule):
 
         self.roc_metric.update(probs, targets)
         fpr, tpr, thresholds = self.roc_metric.compute()
+        fpr = fpr.cpu()
+        tpr = tpr.cpu()
 
         fig, ax = plt.subplots()
         ax.plot(fpr, tpr, label=f"AUROC: {auroc:.2f}")
@@ -277,7 +279,9 @@ class TraverseNN(L.LightningModule):
         input_dict = {}
         # for each node, we learn 2 features for each site (up and down)
         # Features have length d_out_traverse
-        learned_features = torch.zeros(len(mutations), seq_length, 2, d_out_traverse)
+        learned_features = torch.zeros(
+            len(mutations), seq_length, 2, d_out_traverse
+        ).to(traversal.device)
         i_dir = 0
         for direction in traversal:  # upward vs downward
             for node in direction:  # internal nodes that need features for edges
