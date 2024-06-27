@@ -64,7 +64,7 @@ def trees_rooted_at_outgroup():
 def test_masking():
     trees = trees_rooted_at_outgroup()
     labels = []
-    traversal_data = TraversalDataset(trees, labels)
+    traversal_data = TraversalDataset(trees, labels, device="cpu")
     tree1_masks = [False, False, True, True, False, False, False, False]
     tree2_masks = [False, False, True, False, False, True, False, False]
     excepted_masks = [tree1_masks, tree2_masks]
@@ -78,7 +78,7 @@ def test_masking():
 def test_get_mutations():
     trees = trees_rooted_at_outgroup()
     labels = []
-    traversal_data = TraversalDataset(trees, labels)
+    traversal_data = TraversalDataset(trees, labels, device="cpu")
     mutations = traversal_data.mutations
     num_trees = len(trees)
     num_nodes = len(list(trees[0].traverse()))
@@ -109,7 +109,7 @@ def test_get_mutations():
 def test_get_traversal():
     trees = trees_rooted_at_outgroup()
     labels = []
-    traversal_data = TraversalDataset(trees, labels)
+    traversal_data = TraversalDataset(trees, labels, device="cpu")
     traversal = traversal_data.traversal
     num_trees = len(trees)
     num_int_nodes = len(trees[0]) - 2
