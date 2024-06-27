@@ -31,6 +31,9 @@ d_model = 2 * d_out_traverse  # size of embedding that we feed into site-aggrega
 dim_feedforward = 8
 layer_count = 4
 
+# for matrix multiplications with Tensor Cores
+torch.set_float32_matmul_precision("high")
+
 
 class TraverseNN(L.LightningModule):
     """
@@ -77,6 +80,10 @@ class TraverseNN(L.LightningModule):
         self.test_probs = []
         self.test_targets = []
 
+    def data_to_device(self, dataset, device):
+        for data in dataset:
+            data = data.to(device)
+
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         return optimizer
@@ -97,6 +104,7 @@ class TraverseNN(L.LightningModule):
             fw_output = [
                 self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
             ]
+            self.data_to_device([traversal, mutations, yb, mask], self.device)
         # padding if trees have varying number of leaves
         max_length = max([i.size(0) for i in fw_output])
         padded_fw_output = [
@@ -124,6 +132,7 @@ class TraverseNN(L.LightningModule):
             fw_output = [
                 self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
             ]
+            self.data_to_device([traversal, mutations, yb, mask], self.device)
         # padding if trees have varying number of leaves
         max_length = max([i.size(0) for i in fw_output])
         padded_fw_output = [
@@ -144,6 +153,7 @@ class TraverseNN(L.LightningModule):
             fw_output = [
                 self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
             ]
+            self.data_to_device([traversal, mutations, yb, mask], self.device)
         # padding if trees have varying number of leaves
         max_length = max([i.size(0) for i in fw_output])
         padded_fw_output = [

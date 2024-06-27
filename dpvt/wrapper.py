@@ -3,6 +3,7 @@ from torch.utils.data import DataLoader
 import torch.nn.functional as F
 import lightning as L
 from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.profilers import AdvancedProfiler
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 from torch.utils.data import Dataset
 from ete3 import Tree
@@ -86,10 +87,10 @@ class TraversalDataset(Dataset):
 
     def __getitem__(self, idx):
         device = self.device
-        traversal = self.traversal[idx].to(device)
-        mutations = self.mutations[idx].to(device)
-        labels = torch.tensor(self.labels[idx]).to(device)
-        mask = torch.tensor(self.mask[idx]).to(device)
+        traversal = self.traversal[idx]
+        mutations = self.mutations[idx]
+        labels = torch.tensor(self.labels[idx])
+        mask = torch.tensor(self.mask[idx])
         return (
             traversal,
             mutations,
@@ -224,13 +225,22 @@ class Wrap:
             self.model = model
 
         self.train_loader = DataLoader(
-            train_data, batch_size=self.batch_size, collate_fn=custom_collate
+            train_data,
+            batch_size=self.batch_size,
+            collate_fn=custom_collate,
+            num_workers=31,
         )
         self.val_loader = DataLoader(
-            val_data, batch_size=self.batch_size, collate_fn=custom_collate
+            val_data,
+            batch_size=self.batch_size,
+            collate_fn=custom_collate,
+            num_workers=31,
         )
         self.test_loader = DataLoader(
-            test_data, batch_size=self.batch_size, collate_fn=custom_collate
+            test_data,
+            batch_size=self.batch_size,
+            collate_fn=custom_collate,
+            num_workers=31,
         )
 
         logger = TensorBoardLogger("lightning_logs", name=self.log_path)
@@ -241,6 +251,7 @@ class Wrap:
             patience=20,  # Number of epochs with no improvement after which training will be stopped
             mode="min",  # Stop training when the quantity monitored has stopped decreasing
         )
+        profiler = AdvancedProfiler(dirpath="profiler_output/", filename=log_path)
         self.trainer = L.Trainer(
             accelerator=self.device,
             devices=1,
@@ -248,7 +259,9 @@ class Wrap:
             max_epochs=self.epochs,
             log_every_n_steps=1,
             callbacks=[checkpoint_callback, early_stop_callback],
+            profiler=profiler,
         )
+        profiler.describe()
 
     def train(self, checkpoint):
         # train and save trained model
@@ -313,12 +326,14 @@ class HyperWrap:
             patience=20,  # Number of epochs with no improvement after which training will be stopped
             mode="min",  # Stop training when the quantity monitored has stopped decreasing
         )
+        profiler = AdvancedProfiler()
         trainer = L.Trainer(
             accelerator=self.device,
             devices=1,
             logger=logger,
             max_epochs=self.epochs,
             callbacks=[checkpoint_callback, early_stop_callback],
+            profiler=profiler,
         )
 
         # Train the model
