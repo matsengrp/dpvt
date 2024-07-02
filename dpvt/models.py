@@ -283,6 +283,16 @@ class TraverseNN(L.LightningModule):
     def forward_on_traversal(self, traversal, mutations):
         """
         Compute features from traversal datastructure, given one tree/traversal
+        and corresponding mutations (for all sites), then aggregates and classifies.
+        """
+        learned_features = self.traversal_on_traversal(traversal, mutations)
+        encoder_output = self.encoder(learned_features)
+        logit = self.classifier(encoder_output[:, 0])
+        return logit
+
+    def traversal_on_traversal(self, traversal, mutations):
+        """
+        Compute features from traversal datastructure, given one tree/traversal
         and corresponding mutations (for all sites).
         """
         seq_length = mutations.size(1)
@@ -296,29 +306,31 @@ class TraverseNN(L.LightningModule):
         for direction in traversal:  # upward vs downward
             for node in direction:  # internal nodes that need features for edges
                 current_node = int(node[2])
-                child1 = int(node[0])
-                child2 = int(node[1])
+                # adjacent nodes (either children or sibling and parent)
+                adj_node1 = int(node[0])
+                adj_node2 = int(node[1])
                 input_dict[current_node] = {}
                 if i_dir == 0:  # upward traversal
                     for i in range(seq_length):
                         learned_features[current_node][i][i_dir] = (
                             self.traverse_node_aggregate(
-                                mutations[child1][i],
-                                learned_features[child1][i][i_dir],
-                                mutations[child2][i],
-                                learned_features[child2][i][i_dir],
+                                mutations[adj_node1][i],
+                                learned_features[adj_node1][i][i_dir],
+                                mutations[adj_node2][i],
+                                learned_features[adj_node2][i][i_dir],
                             )
                         )
                 else:
                     for i in range(seq_length):
                         learned_features[current_node][i][i_dir] = (
                             self.traverse_node_aggregate(
-                                mutations[child1][i],
-                                learned_features[child1][i][i_dir],
-                                mutations[child2][i],
-                                learned_features[child2][i][
+                                mutations[adj_node1][i],
+                                learned_features[adj_node1][i][i_dir],
+                                -mutations[adj_node2][i],
+                                learned_features[adj_node2][i][
                                     0
                                 ],  # feature for sibling taken from upwards traversal
+                                # -, bc from_parent mutations instead of to_parent
                             )
                         )
             i_dir += 1
@@ -326,9 +338,7 @@ class TraverseNN(L.LightningModule):
         learned_features = learned_features.reshape(
             len(mutations), seq_length, 2 * d_out_traverse
         )
-        encoder_output = self.encoder(learned_features)
-        logit = self.classifier(encoder_output[:, 0])
-        return logit
+        return learned_features
 
     def compute_features_via_traversal(
         self,
@@ -611,5 +621,24 @@ class TransformerEncoderTraversal(TraverseNN):
             # output dim = (n_sites, n_states=4)
             # assign learned features to nodes
             node.to_parent["all_sites_edge_mutation"] = output
+            # as with mutations, we assume -1 * vector for from_parent
             node.from_parent["all_sites_edge_mutation"] = -output
         return None
+
+    def site_aggregate_traversal(self, mutations):
+        aggregated_mutation_feature = torch.zeros_like(mutations)
+        # for i in range(len(mutations)):
+        aggregated_mutation_feature = self.encoder(mutations)
+        return aggregated_mutation_feature
+
+    def forward_on_traversal(self, traversal, mutations):
+        """
+        Compute features from traversal datastructure, given one tree/traversal
+        and corresponding mutations (for all sites), then aggregates and classifies.
+        """
+        aggregated_mutation_features = self.site_aggregate_traversal(mutations)
+        learned_features = self.traversal_on_traversal(
+            traversal, aggregated_mutation_features
+        )
+        logit = self.classifier(learned_features[:, 0])
+        return logit
