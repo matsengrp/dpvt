@@ -239,7 +239,7 @@ class Wrap:
             collate_fn=custom_collate,
         )
 
-        logger = TensorBoardLogger("lightning_logs", name=self.log_path)
+        logger = TensorBoardLogger("lightning_logs/" + self.device, name=self.log_path)
         checkpoint_callback = ModelCheckpoint(every_n_epochs=10, save_top_k=-1)
         # early stopping if overfitting occurs
         early_stop_callback = EarlyStopping(
@@ -247,7 +247,7 @@ class Wrap:
             patience=20,  # Number of epochs with no improvement after which training will be stopped
             mode="min",  # Stop training when the quantity monitored has stopped decreasing
         )
-        profiler = AdvancedProfiler(dirpath="profiler_output/", filename=log_path)
+        profiler = AdvancedProfiler(dirpath="profiler_output/" + self.device, filename=log_path)
         self.trainer = L.Trainer(
             accelerator=self.device,
             devices=1,
