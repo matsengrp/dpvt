@@ -227,19 +227,16 @@ class Wrap:
             train_data,
             batch_size=self.batch_size,
             collate_fn=custom_collate,
-            num_workers=31,
         )
         self.val_loader = DataLoader(
             val_data,
             batch_size=self.batch_size,
             collate_fn=custom_collate,
-            num_workers=31,
         )
         self.test_loader = DataLoader(
             test_data,
             batch_size=self.batch_size,
             collate_fn=custom_collate,
-            num_workers=31,
         )
 
         logger = TensorBoardLogger("lightning_logs", name=self.log_path)
