@@ -314,11 +314,11 @@ class TraverseNN(L.LightningModule):
                         learned_features[current_node][i][i_dir] = (
                             self.traverse_node_aggregate(
                                 mutations[child1][i],
-                                learned_features[child1][i][
+                                learned_features[child1][i][i_dir],
+                                mutations[child2][i],
+                                learned_features[child2][i][
                                     0
                                 ],  # feature for sibling taken from upwards traversal
-                                mutations[child2][i],
-                                learned_features[child2][i][i_dir],
                             )
                         )
             i_dir += 1
@@ -351,16 +351,10 @@ class TraverseNN(L.LightningModule):
         """
         # root-ward traversal
         for node in tree.traverse(strategy="postorder"):
-            if node.is_leaf():
+            if node.is_leaf() or node.is_root():
                 node.to_parent["clade_mutation_feature"] = torch.zeros(
                     (seq_length, d_out_traverse)
                 )
-            elif len(node.children) == 1:  # node is root with single child
-                assert node.up is None
-                child = node.children[0]
-                node.to_parent["clade_mutation_feature"] = child.to_parent[
-                    "clade_mutation_feature"
-                ]
             else:
                 feature = torch.zeros((seq_length, d_out_traverse))
                 try:
@@ -378,7 +372,7 @@ class TraverseNN(L.LightningModule):
         # leaf-ward traversal
         for node in tree.traverse(strategy="preorder"):
             feature = torch.zeros((seq_length, d_out_traverse))
-            if node.is_root():
+            if node.is_root() or node.is_leaf():
                 node.from_parent["clade_mutation_feature"] = feature
             elif node.up.is_root():
                 assert (

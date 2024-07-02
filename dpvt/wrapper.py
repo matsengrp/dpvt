@@ -86,7 +86,6 @@ class TraversalDataset(Dataset):
         return len(self.labels)
 
     def __getitem__(self, idx):
-        device = self.device
         traversal = self.traversal[idx]
         mutations = self.mutations[idx]
         labels = torch.tensor(self.labels[idx])
@@ -138,8 +137,8 @@ class TraversalDataset(Dataset):
                 if not (node.is_leaf() or node.is_root() or node.up.is_root()):
                     traversal[tree_index, 1, node_in_traversal_index, :] = torch.tensor(
                         [
-                            node_index_dict[node.get_sisters()[0]],
                             node_index_dict[node.up],
+                            node_index_dict[node.get_sisters()[0]],
                             node_index_dict[node],
                         ]
                     )
