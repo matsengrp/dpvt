@@ -257,7 +257,6 @@ class Wrap:
             callbacks=[checkpoint_callback, early_stop_callback],
             profiler=profiler,
         )
-        profiler.describe()
 
     def train(self, checkpoint):
         # train and save trained model
