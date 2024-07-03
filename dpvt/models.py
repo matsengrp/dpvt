@@ -1,10 +1,11 @@
+import warnings
 import torch
 from torch import nn
 import torch.nn.functional as F
 from torchmetrics import AUROC
 from torchmetrics.classification import BinaryROC
-import matplotlib
 
+import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import lightning as L
@@ -88,7 +89,7 @@ class TraverseNN(L.LightningModule):
 
     def training_step(self, train_batch, batch_idx):
         xb, yb, mask = train_batch
-        pred = torch.stack([self.forward_on_tree(item) for item in xb])
+        pred = self(xb)
         loss = self.masked_bce_loss(pred, yb, mask)
         self.log("train_loss", loss, batch_size=len(xb), on_epoch=True)
         # log predictions on positive- and negative-datapoints, and show data in console
@@ -102,7 +103,7 @@ class TraverseNN(L.LightningModule):
 
     def validation_step(self, val_batch, batch_idx):
         xb, yb, mask = val_batch
-        pred = torch.stack([self.forward_on_tree(item) for item in xb])
+        pred = self(xb)
         loss = self.masked_bce_loss(pred, yb, mask)
         self.log("val_loss", loss, batch_size=len(xb))
 
@@ -116,6 +117,10 @@ class TraverseNN(L.LightningModule):
         self.test_targets.append(masked_yb)
         if torch.numel(masked_yb) > 0:  # Check if there are any unmasked elements
             self.auroc_metric(masked_pred, masked_yb)
+            loss = self.masked_bce_loss(pred, yb, mask)
+            self.log("test_loss", loss, batch_size=len(xb))
+        else:
+            warnings.warn("Your test data is very small, or there is a bug")
         return {}
 
     def on_test_epoch_end(self):
