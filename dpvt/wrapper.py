@@ -26,8 +26,8 @@ def custom_collate(items):
     if type(items[0][0]) == Tree:
         return (
             [item[0] for item in items],
-            torch.tensor([item[1] for item in items]),
-            torch.tensor([item[2] for item in items]),
+            torch.stack([item[1] for item in items]),
+            torch.stack([item[2] for item in items]),
         )
     else:
         return (
@@ -41,7 +41,7 @@ def custom_collate(items):
 class TreeDataset(Dataset):
     def __init__(self, data, labels):
         self.data = data
-        self.labels = labels
+        self.labels = self.add_padding(labels)
         self.mask = self.mask_pendant_edges(data)
 
     def __len__(self):
@@ -60,7 +60,15 @@ class TreeDataset(Dataset):
                 for node in tree.traverse("preorder")
             ]
             masks.append(mask_list)
-        return masks
+        mask_tensor = self.add_padding(masks)
+        return mask_tensor
+
+    def add_padding(self, list):
+        # add padding with zeros - can be used for labels and masks
+        max_length = max(len(item) for item in list)
+        padded_lists = [item + [0] * (max_length - len(item)) for item in list]
+        list_tensor = torch.tensor(padded_lists)
+        return list_tensor
 
 
 class TraversalDataset(Dataset):
@@ -78,7 +86,7 @@ class TraversalDataset(Dataset):
 
     def __init__(self, trees, labels, device):
         self.traversal, self.mutations = self.get_tensor_representation(trees)
-        self.labels = labels
+        self.labels = self.pad_labels(labels)
         self.mask = self.mask_pendant_edges(trees)
         self.device = device
 
@@ -88,8 +96,8 @@ class TraversalDataset(Dataset):
     def __getitem__(self, idx):
         traversal = self.traversal[idx]
         mutations = self.mutations[idx]
-        labels = torch.tensor(self.labels[idx])
-        mask = torch.tensor(self.mask[idx])
+        labels = self.labels[idx]
+        mask = self.mask[idx]
         return (
             traversal,
             mutations,
@@ -99,10 +107,9 @@ class TraversalDataset(Dataset):
 
     def get_tensor_representation(self, trees):
         max_n_sites = max([len(tree.sequence) for tree in trees])
+        max_n_nodes = max([len(list(tree.traverse())) for tree in trees])
         max_n_int_nodes = max([len(tree) - 2 for tree in trees])
-        mutations = torch.empty(
-            len(trees), len(list(trees[0].traverse())), max_n_sites, 4
-        )
+        mutations = torch.empty(len(trees), max_n_nodes, max_n_sites, 4)
         mutations.fill_(-1)  # pad with -1 so we can distinguish padding
         # from actual 0 entries representing no mutation
         traversal = torch.empty(len(trees), 2, max_n_int_nodes, 3)
@@ -169,7 +176,9 @@ class TraversalDataset(Dataset):
         return traversal, mutations
 
     def mask_pendant_edges(self, trees):
-        masks = []
+        max_n_nodes = max([len(list(tree.traverse())) for tree in trees])
+        masks = torch.full((len(trees), max_n_nodes), False, dtype=torch.bool)
+        i = 0
         for tree in trees:
             # mask leaves, root (which is leaf) and root (which contains data for edge
             # leading to root leaf)
@@ -177,8 +186,22 @@ class TraversalDataset(Dataset):
                 not (node.is_leaf() or node.is_root() or node.up.is_root())
                 for node in tree.traverse("preorder")
             ]
-            masks.append(mask_list)
+            remaining_spots = max_n_nodes - len(mask_list)
+            mask_list += [False for i in range(remaining_spots)]
+            masks[i] = torch.tensor(mask_list)
+            i += 1
         return masks
+
+    def pad_labels(self, labels):
+        max_length = max([len(label) for label in labels])
+        padded_labels = torch.zeros(len(labels), max_length)
+        i = 0
+        for label in labels:
+            to_fill = max_length - len(label)
+            label += [0 for i in range(to_fill)]
+            padded_labels[i] = torch.tensor(label)
+            i += 1
+        return padded_labels
 
 
 class Wrap:
@@ -247,7 +270,9 @@ class Wrap:
             patience=20,  # Number of epochs with no improvement after which training will be stopped
             mode="min",  # Stop training when the quantity monitored has stopped decreasing
         )
-        profiler = AdvancedProfiler(dirpath="profiler_output/" + self.device, filename=log_path)
+        profiler = AdvancedProfiler(
+            dirpath="profiler_output/" + self.device, filename=log_path
+        )
         self.trainer = L.Trainer(
             accelerator=self.device,
             devices=1,

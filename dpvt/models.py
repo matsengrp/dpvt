@@ -99,18 +99,19 @@ class TraverseNN(L.LightningModule):
         if type(train_batch[0][0]) == Tree:
             xb, yb, mask = train_batch
             fw_output = [self.forward_on_tree(item) for item in xb]
+            # padding if trees have varying number of leaves
+            max_length = max([i.size(0) for i in fw_output])
+            padded_fw_output = [
+                F.pad(l, (0, 0, 0, max_length - l.size(0))) for l in fw_output
+            ] 
+            pred = torch.stack(padded_fw_output)
         else:
             traversal, mutations, yb, mask = train_batch
+            self.data_to_device([traversal, mutations, yb, mask], self.device)
             fw_output = [
                 self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
             ]
-            self.data_to_device([traversal, mutations, yb, mask], self.device)
-        # padding if trees have varying number of leaves
-        max_length = max([i.size(0) for i in fw_output])
-        padded_fw_output = [
-            F.pad(l, (0, 0, 0, max_length - l.size(0))) for l in fw_output
-        ]
-        pred = torch.stack(padded_fw_output)
+            pred = torch.stack(fw_output)
         loss = self.masked_bce_loss(pred, yb, mask)
         self.log("train_loss", loss, batch_size=len(train_batch[0]), on_epoch=True)
         self.logger.experiment.add_scalars("loss", {"train": loss}, self.global_step)
@@ -127,18 +128,19 @@ class TraverseNN(L.LightningModule):
         if type(val_batch[0][0]) == Tree:
             xb, yb, mask = val_batch
             fw_output = [self.forward_on_tree(item) for item in xb]
+            # padding if trees have varying number of leaves
+            max_length = max([i.size(0) for i in fw_output])
+            padded_fw_output = [
+                F.pad(l, (0, 0, 0, max_length - l.size(0))) for l in fw_output
+            ]
+            pred = torch.stack(padded_fw_output)
         else:
             traversal, mutations, yb, mask = val_batch
+            self.data_to_device([traversal, mutations, yb, mask], self.device)
             fw_output = [
                 self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
             ]
-            self.data_to_device([traversal, mutations, yb, mask], self.device)
-        # padding if trees have varying number of leaves
-        max_length = max([i.size(0) for i in fw_output])
-        padded_fw_output = [
-            F.pad(l, (0, 0, 0, max_length - l.size(0))) for l in fw_output
-        ]
-        pred = torch.stack(padded_fw_output)
+            pred = torch.stack(fw_output)
         loss = self.masked_bce_loss(pred, yb, mask)
         self.log("val_loss", loss, batch_size=len(val_batch[0]))
         self.logger.experiment.add_scalars("loss", {"valid": loss}, self.global_step)
@@ -147,19 +149,19 @@ class TraverseNN(L.LightningModule):
         if type(test_batch[0][0]) == Tree:
             xb, yb, mask = test_batch
             fw_output = [self.forward_on_tree(item) for item in xb]
-
+            # padding if trees have varying number of leaves
+            max_length = max([i.size(0) for i in fw_output])
+            padded_fw_output = [
+                F.pad(l, (0, 0, 0, max_length - l.size(0))) for l in fw_output
+            ]
+            pred = torch.stack(padded_fw_output)
         else:
             traversal, mutations, yb, mask = test_batch
+            self.data_to_device([traversal, mutations, yb, mask], self.device)
             fw_output = [
                 self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
             ]
-            self.data_to_device([traversal, mutations, yb, mask], self.device)
-        # padding if trees have varying number of leaves
-        max_length = max([i.size(0) for i in fw_output])
-        padded_fw_output = [
-            F.pad(l, (0, 0, 0, max_length - l.size(0))) for l in fw_output
-        ]
-        pred = torch.stack(padded_fw_output)
+            pred = torch.stack(fw_output)
         # only get unmasked output
         masked_pred = pred[mask]
         masked_yb = yb[mask].unsqueeze(-1).int()
@@ -309,6 +311,9 @@ class TraverseNN(L.LightningModule):
                 # adjacent nodes (either children or sibling and parent)
                 adj_node1 = int(node[0])
                 adj_node2 = int(node[1])
+                if current_node == adj_node1 == adj_node2:
+                    # stop if we are in padded part of traversal representation
+                    break
                 input_dict[current_node] = {}
                 if i_dir == 0:  # upward traversal
                     for i in range(seq_length):
