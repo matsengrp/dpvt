@@ -22,6 +22,35 @@ Currently, datasets are stored in the `dpvt-experiments-1` repository.
 We currently assume that training/testing/validation data is pickled as one dictionary with keys being trees and values being list of labels determining whether an edge is in a MP tree (label `0`) or not (label `1`).
 These labels are sorted according to a pre-order traversal.
 Our training/validation/testing data split is 0.6/0.2/0.2 and when splitting the data we ensure that we get balanced training, validation, and testing sets.
+We implement two different classes for datasets in `wrapper.py`: `TraversalDataset` and `TreeDataset`.
+The current default is that `TraversalDataset` is used when training on the GPU and `TreeDataset` is used for training on the CPU.
+Note that at this time there training on the GPU is more time-consuming than training on the CPU.
+
+
+#### TraversalDataset
+
+- `traversal`: (node1, node2, node3) for all nodes node3 that are below an internal edge for every tree in the input. node1 and node2 will be input to the RNN predicting the feature of node3. For upward traversal e.g. this means that node1 and node2 are children of node3. Nodes are indexed by preorder traversal.
+	- dimension: `(num_trees, 2, num_int_edges, 3)` (2 for upward and downward traversal)
+- `mutations`: Contains for each tree, node, and site a tensor $(m_A,m_G,m_C,m_T)$, where $m_i=1$ and $m_j=-1$ if there is a mutation from base j to base i at this node, all other entries are $0$.
+	- dimension: `(num_trees, num_nodes, num_sites, 4)`
+- `labels`: For each tree and each node, indicates whether the edge above this node is in a MP tree (`0`) or not (`1`)
+	- dimension: `(num_trees, num_nodes)`
+- `masks`: For each tree and each node, indicates whether the edge above this node is an internal edge (`True`) or not (`False`)
+	- dimension: `(num_trees, num_nodes)`
+
+Note that if  input trees are of different sizes, `traversal`, `mutations`, and `labels` are padded with `-1`, masks are padded with `False`.
+
+When iterating through the TraversalDataset in the forward function, we stop as soon as we see `-1` in the traversal tensor, as this means that we reached the padding.
+And with the masks set to False for all those indiced, none of the `-1` are being used for calculating the loss.
+
+
+#### TreeDataset
+- `data`: ete3 trees with node attributes `sequence`, which is needed to assess which mutations occur on each edge
+  - dimension: `num_trees`
+- `labels`: For each tree and each node, indicates whether the edge above this node is in a MP tree (`0`) or not (`1`)
+  - dimension: `(num_trees, num_nodes)`
+- `masks`: For each tree and each node, indicates whether the edge above this node is an internal edge (`True`) or not (`False`)
+  - dimension: `(num_trees, num_nodes)`
 
 
 ## Neural network model
@@ -32,7 +61,7 @@ Our training/validation/testing data split is 0.6/0.2/0.2 and when splitting the
 We define a Pytorch module `TraverseNN` which evaluates whether edges in a given labeled tree appear in a maximum parsimony tree, for the given sequences on the leaf nodes.
 This module is defined in `dpvt/neural_network/models.py`.
 
-The model works as follows:
+The model works as follows (for `TreeDataset`s):
 
 0. We assume an input tree has a `sequence` attribute on each node, which is a string consisting of the characters `A`, `G`, `C`, `T`.
 
@@ -57,6 +86,10 @@ These tensors from each node are stacked together in preorder-traversal order, f
 The a sigmoid is applied.
 At entry $i$, values near `0.0` mean the $i$-th edge is in a maximum parsimony tree, while values near `1.0` mean the $i$-th edge is not in a maximum parsimony tree. 
 The output values are arranged to correspond to edges in preorder traversal order.
+
+
+If the `TraverseDataset` data structure is used, we save features in a tensor and iterate through the `traversal` to compute the features.
+Everything else is completely identical to how things are handled when using `TreeDataset`s.
 
 
 ### TransformerEncoderTraversal
