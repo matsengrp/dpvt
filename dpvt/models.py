@@ -366,7 +366,7 @@ class TraverseNN(L.LightningModule):
         """
         # root-ward traversal
         for node in tree.traverse(strategy="postorder"):
-            if node.is_leaf() or node.is_root():
+            if node.is_leaf() or node.is_root() or node.up.is_root():
                 node.to_parent["clade_mutation_feature"] = torch.zeros(
                     (seq_length, d_out_traverse)
                 )
