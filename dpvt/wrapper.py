@@ -221,10 +221,15 @@ class Wrap:
         learning_rate=0.005,
         epochs=200,
         hyperparameter_path="",
+        profiling=False,
     ):
         self.log_path = log_path
         self.epochs = epochs
-        self.device = device
+        if device == "cpu-tree-dataset":
+            self.device = "cpu"
+        else:
+            self.device = device
+        self.profiling = profiling
 
         # If hyperparameter tuning has been done, read hyperparameters and use them from
         # training
@@ -267,18 +272,19 @@ class Wrap:
         # early stopping if overfitting occurs
         early_stop_callback = EarlyStopping(
             monitor="val_loss",
-            patience=20,  # Number of epochs with no improvement after which training will be stopped
+            patience=10,  # Number of epochs with no improvement after which training will be stopped
             mode="min",  # Stop training when the quantity monitored has stopped decreasing
         )
-        profiler = AdvancedProfiler(
-            dirpath="profiler_output/" + self.device, filename=log_path
-        )
+        profiler = None
+        if self.profiling:
+            profiler = AdvancedProfiler(
+                dirpath="profiler_output/" + self.device, filename=self.log_path
+            )
         self.trainer = L.Trainer(
             accelerator=self.device,
             devices=1,
             logger=logger,
             max_epochs=self.epochs,
-            log_every_n_steps=1,
             callbacks=[checkpoint_callback, early_stop_callback],
             profiler=profiler,
         )
@@ -310,15 +316,20 @@ class HyperWrap:
         epochs=200,
         n_trials=10,
         checkpoint_dir="hyper_checkpoints/",
+        profiling=False,
     ):
         self.model = model
         self.train_data = train_data
         self.val_data = val_data
         self.log_path = log_path
-        self.device = device
+        if self.device == "cpu-tree-dataset":
+            self.device = "cpu"
+        else:
+            self.device = device
         self.epochs = epochs
         self.n_trials = n_trials
         self.checkpoint_dir = checkpoint_dir
+        self.profiling = profiling
 
     def objective(self, trial):
         """
@@ -343,11 +354,15 @@ class HyperWrap:
         checkpoint_callback = ModelCheckpoint(every_n_epochs=10, save_top_k=-1)
         early_stop_callback = EarlyStopping(
             monitor="val_loss",  # Metric to monitor
-            patience=20,  # Number of epochs with no improvement after which training will be stopped
+            patience=10,  # Number of epochs with no improvement after which training will be stopped
             mode="min",  # Stop training when the quantity monitored has stopped decreasing
         )
-        profiler = AdvancedProfiler()
-        trainer = L.Trainer(
+        profiler = None
+        if self.profiling:
+            profiler = AdvancedProfiler(
+                dirpath="profiler_output/" + self.device, filename=self.log_path
+            )
+        self.trainer = L.Trainer(
             accelerator=self.device,
             devices=1,
             logger=logger,
@@ -357,10 +372,10 @@ class HyperWrap:
         )
 
         # Train the model
-        trainer.fit(model, train_loader, val_loader)
+        self.trainer.fit(model, train_loader, val_loader)
 
         # Return the metric to optimize
-        return trainer.callback_metrics["val_loss"].item()
+        return self.trainer.callback_metrics["val_loss"].item()
 
     def optuna_optimize(
         self,
