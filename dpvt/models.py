@@ -253,6 +253,7 @@ class TraverseNN(L.LightningModule):
         first_node_feature,
         second_node_mutations,
         second_node_feature,
+        output_feature,
     ):
         """
         Takes in feature vectors from two neighbor-nodes of a given node, and outputs
@@ -261,21 +262,15 @@ class TraverseNN(L.LightningModule):
             - two children of a node, during root-ward traversal, or
             - one parent and one sister of a node, during leaf-ward traversal.
         """
-        first_data = torch.cat(
+        combined_data = torch.cat(
             (
                 first_node_mutations,
                 first_node_feature,
-            ),
-            dim=0,
-        )
-        second_data = torch.cat(
-            (
                 second_node_mutations,
                 second_node_feature,
             ),
             dim=0,
         )
-        combined_data = torch.cat((first_data, second_data))
         output = self.traverse_stack(combined_data)
         return output
 
@@ -315,28 +310,27 @@ class TraverseNN(L.LightningModule):
                 input_dict[current_node] = {}
                 if i_dir == 0:  # upward traversal
                     for i in range(seq_length):
-                        learned_features[current_node][i][i_dir] = (
-                            self.traverse_node_aggregate(
-                                mutations[adj_node1][i],
-                                learned_features[adj_node1][i][i_dir],
-                                mutations[adj_node2][i],
-                                learned_features[adj_node2][i][i_dir],
-                            )
+                        self.traverse_node_aggregate(
+                            mutations[adj_node1][i],
+                            learned_features[adj_node1][i][i_dir],
+                            mutations[adj_node2][i],
+                            learned_features[adj_node2][i][i_dir],
+                            learned_features[current_node][i][i_dir],
                         )
                 else:
                     for i in range(seq_length):
-                        learned_features[current_node][i][i_dir] = (
-                            self.traverse_node_aggregate(
-                                mutations[adj_node1][i],
-                                learned_features[adj_node1][i][i_dir],
-                                -mutations[adj_node2][i],
-                                learned_features[adj_node2][i][
-                                    0
-                                ],  # feature for sibling taken from upwards traversal
-                                # -, bc from_parent mutations instead of to_parent
-                            )
+                        self.traverse_node_aggregate(
+                            mutations[adj_node1][i],
+                            learned_features[adj_node1][i][i_dir],
+                            -mutations[adj_node2][i],
+                            learned_features[adj_node2][i][
+                                0
+                            ],  # feature for sibling taken from upwards traversal
+                            # -, bc from_parent mutations instead of to_parent
+                            learned_features[current_node][i][i_dir],
                         )
             i_dir += 1
+
         # concatenate features to one dimension
         learned_features = learned_features.reshape(
             len(mutations), seq_length, 2 * d_out_traverse
@@ -445,24 +439,23 @@ class TraverseNN(L.LightningModule):
             - one parent and one sister of a node, during leaf-ward traversal.
         """
         i = site_idx
-        first_data = torch.cat(
-            (
-                first_node_dict[feature_name][i],
-                first_node_dict["clade_mutation_feature"][i],
-            ),
+        combined_data = torch.cat(
+            (first_node_dict[feature_name][i],
+            first_node_dict["clade_mutation_feature"][i],
+            second_node_dict[feature_name][i],
+            second_node_dict["clade_mutation_feature"][i]),
             dim=0,
         )
-        second_data = torch.cat(
-            (
-                second_node_dict[feature_name][i],
-                second_node_dict["clade_mutation_feature"][i],
-            ),
-            dim=0,
-        )
-        combined_data = torch.cat((first_data, second_data))
         output = self.traverse_stack(combined_data)
         if symmetrize:
-            output += self.traverse_stack(torch.cat((first_data, second_data)))
+            output += self.traverse_stack(
+                torch.cat(
+                    (first_node_dict[feature_name][i],
+                    first_node_dict["clade_mutation_feature"][i],
+                    second_node_dict[feature_name][i],
+                    second_node_dict["clade_mutation_feature"][i])
+                )
+            )
         return output
 
     @staticmethod
