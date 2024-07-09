@@ -103,7 +103,7 @@ class TraverseNN(L.LightningModule):
             max_length = max([i.size(0) for i in fw_output])
             padded_fw_output = [
                 F.pad(l, (0, 0, 0, max_length - l.size(0))) for l in fw_output
-            ] 
+            ]
             pred = torch.stack(padded_fw_output)
         else:
             traversal, mutations, yb, mask = train_batch
@@ -253,7 +253,6 @@ class TraverseNN(L.LightningModule):
         first_node_feature,
         second_node_mutations,
         second_node_feature,
-        symmetrize=False,
     ):
         """
         Takes in feature vectors from two neighbor-nodes of a given node, and outputs
@@ -278,8 +277,6 @@ class TraverseNN(L.LightningModule):
         )
         combined_data = torch.cat((first_data, second_data))
         output = self.traverse_stack(combined_data)
-        if symmetrize:
-            output += self.traverse_stack(torch.cat((first_data, second_data)))
         return output
 
     def forward_on_traversal(self, traversal, mutations):
@@ -306,11 +303,12 @@ class TraverseNN(L.LightningModule):
         ).to(traversal.device)
         i_dir = 0
         for direction in traversal:  # upward vs downward
-            for node in direction:  # internal nodes that need features for edges
-                current_node = int(node[2])
+            for node_list in direction:
+                # first two nodes in list have feature already, we learn feature for third node in list
+                current_node = int(node_list[2])
                 # adjacent nodes (either children or sibling and parent)
-                adj_node1 = int(node[0])
-                adj_node2 = int(node[1])
+                adj_node1 = int(node_list[0])
+                adj_node2 = int(node_list[1])
                 if current_node == adj_node1 == adj_node2:
                     # stop if we are in padded part of traversal representation
                     break
