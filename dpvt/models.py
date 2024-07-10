@@ -272,7 +272,7 @@ class TraverseNN(L.LightningModule):
             dim=0,
         )
         output = self.traverse_stack(combined_data)
-        return output
+        output_feature.copy_(output)
 
     def forward_on_traversal(self, traversal, mutations):
         """
@@ -320,9 +320,9 @@ class TraverseNN(L.LightningModule):
                 else:
                     for i in range(seq_length):
                         self.traverse_node_aggregate(
-                            mutations[adj_node1][i],
+                            - mutations[adj_node1][i],
                             learned_features[adj_node1][i][i_dir],
-                            -mutations[adj_node2][i],
+                            mutations[adj_node2][i],
                             learned_features[adj_node2][i][
                                 0
                             ],  # feature for sibling taken from upwards traversal
@@ -416,9 +416,6 @@ class TraverseNN(L.LightningModule):
             ]
         )
         # input_features dim = (n_nodes, n_sites, d_model=8)
-        ## debug
-        # print("input:", input_features)
-        # print("input dim:", input_features.size())
         out = self.encoder(input_features)
         # out dim = (n_nodes, n_sites, d_model=8)
         return out
@@ -440,20 +437,24 @@ class TraverseNN(L.LightningModule):
         """
         i = site_idx
         combined_data = torch.cat(
-            (first_node_dict[feature_name][i],
-            first_node_dict["clade_mutation_feature"][i],
-            second_node_dict[feature_name][i],
-            second_node_dict["clade_mutation_feature"][i]),
+            (
+                first_node_dict[feature_name][i],
+                first_node_dict["clade_mutation_feature"][i],
+                second_node_dict[feature_name][i],
+                second_node_dict["clade_mutation_feature"][i],
+            ),
             dim=0,
         )
         output = self.traverse_stack(combined_data)
         if symmetrize:
             output += self.traverse_stack(
                 torch.cat(
-                    (first_node_dict[feature_name][i],
-                    first_node_dict["clade_mutation_feature"][i],
-                    second_node_dict[feature_name][i],
-                    second_node_dict["clade_mutation_feature"][i])
+                    (
+                        first_node_dict[feature_name][i],
+                        first_node_dict["clade_mutation_feature"][i],
+                        second_node_dict[feature_name][i],
+                        second_node_dict["clade_mutation_feature"][i],
+                    )
                 )
             )
         return output
