@@ -322,7 +322,7 @@ class HyperWrap:
         self.train_data = train_data
         self.val_data = val_data
         self.log_path = log_path
-        if self.device == "cpu-tree-dataset":
+        if device == "cpu-tree-dataset":
             self.device = "cpu"
         else:
             self.device = device
