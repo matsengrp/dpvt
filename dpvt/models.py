@@ -308,7 +308,7 @@ class TraverseNN(L.LightningModule):
                     break
                 if i_dir == 0:  # upward traversal
                     for i in range(max_seq_length):
-                        if mutations[adj_node1][i][0] == mutations[adj_node1][i][1]:
+                        if mutations[adj_node1][i][0] == mutations[adj_node1][i][1] == -1:
                             # we are at a -1 row (padding)
                             break
                         self.traverse_node_aggregate(
@@ -320,7 +320,7 @@ class TraverseNN(L.LightningModule):
                         )
                 else:
                     for i in range(max_seq_length):
-                        if mutations[adj_node1][i][0] == mutations[adj_node1][i][1]:
+                        if mutations[adj_node1][i][0] == mutations[adj_node1][i][1] == -1:
                             # we are at a -1 row (padding)
                             break
                         self.traverse_node_aggregate(
