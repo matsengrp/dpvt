@@ -289,11 +289,11 @@ class TraverseNN(L.LightningModule):
         Compute features from traversal datastructure, given one tree/traversal
         and corresponding mutations (for all sites).
         """
-        seq_length = mutations.size(1)
+        max_seq_length = mutations.size(1)
         # for each node, we learn 2 features for each site (up and down)
         # Features have length d_out_traverse
         learned_features = torch.zeros(
-            len(mutations), seq_length, 2, d_out_traverse
+            len(mutations), max_seq_length, 2, d_out_traverse
         ).to(traversal.device)
         i_dir = 0
         for direction in traversal:  # upward vs downward
@@ -307,7 +307,10 @@ class TraverseNN(L.LightningModule):
                     # stop if we are in padded part of traversal representation
                     break
                 if i_dir == 0:  # upward traversal
-                    for i in range(seq_length):
+                    for i in range(max_seq_length):
+                        if mutations[adj_node1][i][0] == mutations[adj_node1][i][1]:
+                            # we are at a -1 row (padding)
+                            break
                         self.traverse_node_aggregate(
                             mutations[adj_node1][i],
                             learned_features[adj_node1][i][i_dir],
@@ -316,7 +319,10 @@ class TraverseNN(L.LightningModule):
                             learned_features[current_node][i][i_dir],
                         )
                 else:
-                    for i in range(seq_length):
+                    for i in range(max_seq_length):
+                        if mutations[adj_node1][i][0] == mutations[adj_node1][i][1]:
+                            # we are at a -1 row (padding)
+                            break
                         self.traverse_node_aggregate(
                             - mutations[adj_node1][i],
                             learned_features[adj_node1][i][i_dir],
@@ -331,7 +337,7 @@ class TraverseNN(L.LightningModule):
 
         # concatenate features to one dimension
         learned_features = learned_features.reshape(
-            len(mutations), seq_length, 2 * d_out_traverse
+            len(mutations), max_seq_length, 2 * d_out_traverse
         )
         return learned_features
 
@@ -590,7 +596,7 @@ class TransformerEncoderTraversal(TraverseNN):
         self.assign_mutation_vectors(tree)
         self.site_aggregate(tree)
         self.compute_features_via_traversal(
-            tree, seq_length=1, feature_name="all_sites_edge_mutation"
+            tree, seq_length=len(tree.sequence), feature_name="all_sites_edge_mutation"
         )
         output = torch.stack(
             [
