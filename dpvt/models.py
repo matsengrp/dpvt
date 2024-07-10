@@ -290,7 +290,6 @@ class TraverseNN(L.LightningModule):
         and corresponding mutations (for all sites).
         """
         seq_length = mutations.size(1)
-        input_dict = {}
         # for each node, we learn 2 features for each site (up and down)
         # Features have length d_out_traverse
         learned_features = torch.zeros(
@@ -307,7 +306,6 @@ class TraverseNN(L.LightningModule):
                 if current_node == adj_node1 == adj_node2:
                     # stop if we are in padded part of traversal representation
                     break
-                input_dict[current_node] = {}
                 if i_dir == 0:  # upward traversal
                     for i in range(seq_length):
                         self.traverse_node_aggregate(
