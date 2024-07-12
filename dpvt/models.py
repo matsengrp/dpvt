@@ -98,7 +98,9 @@ class TraverseNN(L.LightningModule):
     def training_step(self, train_batch, batch_idx):
         if type(train_batch[0][0]) == Tree:
             xb, yb, mask = train_batch
-            fw_output = [self.forward_on_tree(item) for item in xb]
+            max_seq_length = max([len(tree.sequence) for tree in xb])
+            # needed for padding if trees have different lengths sequences
+            fw_output = [self.forward_on_tree(item, max_seq_length) for item in xb]
             # padding if trees have varying number of leaves
             max_length = max([i.size(0) for i in fw_output])
             padded_fw_output = [
@@ -127,7 +129,9 @@ class TraverseNN(L.LightningModule):
     def validation_step(self, val_batch, batch_idx):
         if type(val_batch[0][0]) == Tree:
             xb, yb, mask = val_batch
-            fw_output = [self.forward_on_tree(item) for item in xb]
+            max_seq_length = max([len(tree.sequence) for tree in xb])
+            # needed for padding if trees have different lengths sequences
+            fw_output = [self.forward_on_tree(item, max_seq_length) for item in xb]
             # padding if trees have varying number of leaves
             max_length = max([i.size(0) for i in fw_output])
             padded_fw_output = [
@@ -148,7 +152,9 @@ class TraverseNN(L.LightningModule):
     def test_step(self, test_batch):
         if type(test_batch[0][0]) == Tree:
             xb, yb, mask = test_batch
-            fw_output = [self.forward_on_tree(item) for item in xb]
+            max_seq_length = max([len(tree.sequence) for tree in xb])
+            # needed for padding if trees have different lengths sequences
+            fw_output = [self.forward_on_tree(item, max_seq_length) for item in xb]
             # padding if trees have varying number of leaves
             max_length = max([i.size(0) for i in fw_output])
             padded_fw_output = [
@@ -222,16 +228,18 @@ class TraverseNN(L.LightningModule):
         """
         if not optimized:
             if type(input) == Tree:
-                logit = self.forward_on_tree(input)
+                max_seq_length = len(input.sequence)
+                logit = self.forward_on_tree(input, max_seq_length)
                 return F.sigmoid(logit)
         # assume input is a list (or iterable) of trees
         if type(input[0]) == Tree:
-            logits = torch.stack([self.forward_on_tree(item) for item in input])
+            max_seq_length = max([tree.sequence for tree in input])
+            logits = torch.stack([self.forward_on_tree(item, max_seq_length) for item in input])
         else:
             logits = torch.stack([self.forward_on_traversal(item) for item in input])
         return F.sigmoid(logits)
 
-    def forward_on_tree(self, tree: Tree):
+    def forward_on_tree(self, tree: Tree, max_seq_length):
         """
         Takes an ete3.Tree as input and outputs a list of 0's and 1's to indicate
         whether each edge on the input tree is present in a maximally parsimonious tree
@@ -241,7 +249,7 @@ class TraverseNN(L.LightningModule):
                 consisting of the characters A, G, C, T
         """
         self.assign_mutation_vectors(tree)
-        self.compute_features_via_traversal(tree, len(tree.sequence))
+        self.compute_features_via_traversal(tree, max_seq_length)
         encoder_output = self.site_aggregate(tree)
         # encoder_output dim = (n_nodes, 1, 8)
         logit = self.classifier(encoder_output[:, 0])
@@ -344,7 +352,7 @@ class TraverseNN(L.LightningModule):
     def compute_features_via_traversal(
         self,
         tree: Tree,
-        seq_length,
+        max_seq_length,
         feature_name="edge_mutation",
     ):
         """
@@ -361,13 +369,14 @@ class TraverseNN(L.LightningModule):
                 are used for encoding
         """
         # root-ward traversal
+        seq_length = len(tree.sequence)
         for node in tree.traverse(strategy="postorder"):
             if node.is_leaf() or node.is_root() or node.up.is_root():
                 node.to_parent["clade_mutation_feature"] = torch.zeros(
-                    (seq_length, d_out_traverse)
+                    (max_seq_length, d_out_traverse)
                 )
             else:
-                feature = torch.zeros((seq_length, d_out_traverse))
+                feature = torch.zeros((max_seq_length, d_out_traverse))
                 try:
                     child1, child2 = node.children
                 except ValueError:
@@ -382,7 +391,7 @@ class TraverseNN(L.LightningModule):
                 node.to_parent["clade_mutation_feature"] = feature
         # leaf-ward traversal
         for node in tree.traverse(strategy="preorder"):
-            feature = torch.zeros((seq_length, d_out_traverse))
+            feature = torch.zeros((max_seq_length, d_out_traverse))
             if node.is_root() or node.is_leaf():
                 node.from_parent["clade_mutation_feature"] = feature
             elif node.up.is_root():
@@ -583,7 +592,7 @@ class TransformerEncoderTraversal(TraverseNN):
         self.encoder = nn.TransformerEncoder(self.encoder_layer, layer_count)
         self.classifier = nn.Linear(d_model, 1)
 
-    def forward_on_tree(self, tree: Tree):
+    def forward_on_tree(self, tree: Tree, max_seq_length):
         """
         Takes an ete3.Tree as input and outputs a 0 or 1 to indicate whether the input
         tree is maximally parsimonious or not, respectively, for the sequences assigned
@@ -596,7 +605,7 @@ class TransformerEncoderTraversal(TraverseNN):
         self.assign_mutation_vectors(tree)
         self.site_aggregate(tree)
         self.compute_features_via_traversal(
-            tree, seq_length=len(tree.sequence), feature_name="all_sites_edge_mutation"
+            tree, max_seq_length, feature_name="all_sites_edge_mutation"
         )
         output = torch.stack(
             [
