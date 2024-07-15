@@ -93,7 +93,6 @@ class Wrap:
 
     def test(self, checkpoint):
         # test and save model
-        self.model.eval()
         result = self.trainer.test(self.model, self.test_loader)
         self.trainer.save_checkpoint(checkpoint)
         return result
