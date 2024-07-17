@@ -110,7 +110,7 @@ class TraverseNN(L.LightningModule):
 
     def test_step(self, test_batch):
         xb, yb, mask = test_batch
-        pred = torch.stack([self.forward_on_tree(item) for item in xb])
+        pred = self(xb)
         # only get unmasked output
         masked_pred = pred[mask]
         masked_yb = yb[mask].unsqueeze(-1).int()
@@ -452,7 +452,7 @@ class TransformerEncoderTraversal(TraverseNN):
         self.assign_mutation_vectors(tree)
         self.site_aggregate(tree)
         self.compute_features_via_traversal(
-            tree, seq_length=len(tree.sequence), feature_name="all_sites_edge_mutation"
+            tree, seq_length=1, feature_name="all_sites_edge_mutation"
         )
         output = torch.stack(
             [
