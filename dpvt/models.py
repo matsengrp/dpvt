@@ -1,8 +1,10 @@
+import warnings
 import torch
 from torch import nn
 import torch.nn.functional as F
 from torchmetrics import AUROC
 from torchmetrics.classification import BinaryROC
+
 import matplotlib
 
 matplotlib.use("Agg")
@@ -116,6 +118,10 @@ class TraverseNN(L.LightningModule):
         self.test_targets.append(masked_yb)
         if torch.numel(masked_yb) > 0:  # Check if there are any unmasked elements
             self.auroc_metric(masked_pred, masked_yb)
+            loss = self.masked_bce_loss(pred, yb, mask)
+            self.log("test_loss", loss, batch_size=len(xb))
+        else:
+            warnings.warn("Your test data is very small, or there is a bug")
         return {}
 
     def on_test_epoch_end(self):
