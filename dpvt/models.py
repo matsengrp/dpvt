@@ -102,7 +102,7 @@ class TraverseNN(L.LightningModule):
             # needed for padding if trees have different lengths sequences
             fw_output = [self.forward_on_tree(item, max_seq_length) for item in xb]
             # padding if trees have varying number of leaves
-            max_length = max([i.size(0) for i in fw_output])
+            max_length = yb.size(1)
             padded_fw_output = [
                 F.pad(l, (0, 0, 0, max_length - l.size(0))) for l in fw_output
             ]
@@ -133,7 +133,7 @@ class TraverseNN(L.LightningModule):
             # needed for padding if trees have different lengths sequences
             fw_output = [self.forward_on_tree(item, max_seq_length) for item in xb]
             # padding if trees have varying number of leaves
-            max_length = max([i.size(0) for i in fw_output])
+            max_length = yb.size(1)
             padded_fw_output = [
                 F.pad(l, (0, 0, 0, max_length - l.size(0))) for l in fw_output
             ]
@@ -156,7 +156,7 @@ class TraverseNN(L.LightningModule):
             # needed for padding if trees have different lengths sequences
             fw_output = [self.forward_on_tree(item, max_seq_length) for item in xb]
             # padding if trees have varying number of leaves
-            max_length = max([i.size(0) for i in fw_output])
+            max_length = yb.size(1)
             padded_fw_output = [
                 F.pad(l, (0, 0, 0, max_length - l.size(0))) for l in fw_output
             ]
