@@ -41,7 +41,7 @@ def custom_collate(items):
 class TreeDataset(Dataset):
     def __init__(self, data, labels):
         self.data = data
-        self.labels = self.add_padding(labels)
+        self.labels = self.add_padding(labels).to(torch.float64)
         self.mask = self.mask_pendant_edges(data)
 
     def __len__(self):
@@ -255,16 +255,19 @@ class Wrap:
             train_data,
             batch_size=self.batch_size,
             collate_fn=custom_collate,
+            num_workers=10,
         )
         self.val_loader = DataLoader(
             val_data,
             batch_size=self.batch_size,
             collate_fn=custom_collate,
+            num_workers=10,
         )
         self.test_loader = DataLoader(
             test_data,
             batch_size=self.batch_size,
             collate_fn=custom_collate,
+            num_workers=10,
         )
 
         logger = TensorBoardLogger("lightning_logs/" + self.device, name=self.log_path)
