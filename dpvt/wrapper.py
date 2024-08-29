@@ -271,11 +271,11 @@ class Wrap:
         )
 
         logger = TensorBoardLogger("lightning_logs/" + self.device, name=self.log_path)
-        checkpoint_callback = ModelCheckpoint(every_n_epochs=10, save_top_k=-1)
+        checkpoint_callback = ModelCheckpoint(every_n_epochs=10, save_top_k=1)
         # early stopping if overfitting occurs
         early_stop_callback = EarlyStopping(
             monitor="val_loss",
-            patience=10,  # Number of epochs with no improvement after which training will be stopped
+            patience=3,  # Number of epochs with no improvement after which training will be stopped
             mode="min",  # Stop training when the quantity monitored has stopped decreasing
         )
         profiler = None
@@ -297,9 +297,9 @@ class Wrap:
         self.trainer.fit(self.model, self.train_loader, self.val_loader)
         self.trainer.save_checkpoint(checkpoint)
 
-    def test(self, checkpoint):
+    def test(self, trained_model_ckpt, checkpoint):
         # test and save model
-        result = self.trainer.test(self.model, self.test_loader)
+        result = self.trainer.test(self.model, self.test_loader, trained_model_ckpt)
         self.trainer.save_checkpoint(checkpoint)
         return result
 
