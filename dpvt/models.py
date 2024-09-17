@@ -385,8 +385,8 @@ class TraverseNN(L.LightningModule):
                         "{len(node.children)} children"
                     )
                 for i in range(seq_length):
-                    feature[i] = self.node_aggregate(
-                        child1.to_parent, child2.to_parent, feature_name, site_idx=i
+                    self.node_aggregate(
+                        child1.to_parent, child2.to_parent, feature_name, feature[i], site_idx=i
                     )
                 node.to_parent["clade_mutation_feature"] = feature
         # leaf-ward traversal
@@ -405,8 +405,8 @@ class TraverseNN(L.LightningModule):
                 assert len(node.get_sisters()) == 1
                 sister = node.get_sisters()[0]
                 for i in range(seq_length):
-                    feature[i] = self.node_aggregate(
-                        parent.from_parent, sister.to_parent, feature_name, site_idx=i
+                    self.node_aggregate(
+                        parent.from_parent, sister.to_parent, feature_name, feature[i], site_idx=i
                     )
                 node.from_parent["clade_mutation_feature"] = feature
         return tree
@@ -438,6 +438,7 @@ class TraverseNN(L.LightningModule):
         first_node_dict,
         second_node_dict,
         feature_name,
+        output_feature,
         site_idx,
         symmetrize=False,
     ):
@@ -448,13 +449,12 @@ class TraverseNN(L.LightningModule):
             - two children of a node, during root-ward traversal, or
             - one parent and one sister of a node, during leaf-ward traversal.
         """
-        i = site_idx
         combined_data = torch.cat(
             (
-                first_node_dict[feature_name][i],
-                first_node_dict["clade_mutation_feature"][i],
-                second_node_dict[feature_name][i],
-                second_node_dict["clade_mutation_feature"][i],
+                first_node_dict[feature_name][site_idx],
+                first_node_dict["clade_mutation_feature"][site_idx],
+                second_node_dict[feature_name][site_idx],
+                second_node_dict["clade_mutation_feature"][site_idx],
             ),
             dim=0,
         )
@@ -463,14 +463,14 @@ class TraverseNN(L.LightningModule):
             output += self.traverse_stack(
                 torch.cat(
                     (
-                        first_node_dict[feature_name][i],
-                        first_node_dict["clade_mutation_feature"][i],
-                        second_node_dict[feature_name][i],
-                        second_node_dict["clade_mutation_feature"][i],
+                        first_node_dict[feature_name][site_idx],
+                        first_node_dict["clade_mutation_feature"][site_idx],
+                        second_node_dict[feature_name][site_idx],
+                        second_node_dict["clade_mutation_feature"][site_idx],
                     )
                 )
             )
-        return output
+        output_feature.copy_(output)
 
     @staticmethod
     def assign_mutation_vectors(tree):
