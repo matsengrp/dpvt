@@ -7,6 +7,8 @@ from pytorch_lightning.profilers import AdvancedProfiler
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 from torch.utils.data import Dataset
 from ete3 import Tree
+from datetime import datetime
+todays_date = datetime.now().strftime("%Y-%m-%d")
 
 import optuna
 import json
@@ -222,6 +224,7 @@ class Wrap:
         epochs=200,
         hyperparameter_path="",
         profiling=False,
+        accum_grad_batches=1,
     ):
         self.log_path = log_path
         self.epochs = epochs
@@ -270,8 +273,8 @@ class Wrap:
             num_workers=10,
         )
 
-        logger = TensorBoardLogger("lightning_logs/" + self.device, name=self.log_path)
-        checkpoint_callback = ModelCheckpoint(every_n_epochs=10, save_top_k=1)
+        logger = TensorBoardLogger("lightning_logs/" + self.device + "_" + str(todays_date), name=self.log_path)
+        checkpoint_callback = ModelCheckpoint(every_n_epochs=1, save_top_k=1)
         # early stopping if overfitting occurs
         early_stop_callback = EarlyStopping(
             monitor="val_loss",
@@ -287,9 +290,11 @@ class Wrap:
             accelerator=self.device,
             devices=1,
             logger=logger,
+            log_every_n_steps=1,
             max_epochs=self.epochs,
             callbacks=[checkpoint_callback, early_stop_callback],
             profiler=profiler,
+            accumulate_grad_batches=accum_grad_batches,
         )
 
     def train(self, checkpoint):
