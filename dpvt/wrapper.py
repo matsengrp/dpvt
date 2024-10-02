@@ -362,7 +362,7 @@ class HyperWrap:
         checkpoint_callback = ModelCheckpoint(every_n_epochs=10, save_top_k=-1)
         early_stop_callback = EarlyStopping(
             monitor="val_loss",  # Metric to monitor
-            patience=10,  # Number of epochs with no improvement after which training will be stopped
+            patience=3,  # Number of epochs with no improvement after which training will be stopped
             mode="min",  # Stop training when the quantity monitored has stopped decreasing
         )
         profiler = None

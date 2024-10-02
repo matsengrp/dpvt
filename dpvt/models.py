@@ -21,7 +21,7 @@ n_states = len(STATES)
 learning_rate = 0.01
 
 # traverse stack parameters
-d_out_traverse = 4
+d_out_traverse = 32
 d_hidden_traverse = 32
 
 # site-aggregate transformer parameters
