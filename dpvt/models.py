@@ -21,12 +21,10 @@ n_states = len(STATES)
 learning_rate = 0.01
 
 # traverse stack parameters
-d_out_traverse = 32
 d_hidden_traverse = 32
 
 # site-aggregate transformer parameters
 nhead = 2
-d_model = 2 * d_out_traverse  # size of embedding that we feed into site-aggregator,
 # coming from concatenating the traversal output-feature in two directions across edge
 dim_feedforward = 8
 layer_count = 4
@@ -59,21 +57,24 @@ class TraverseNN(L.LightningModule):
             present in a maximum parsimony tree
     """
 
-    def __init__(self, learning_rate=0.01):
+    def __init__(self, learning_rate=0.01, feature_length=32, dim_mlp_layers=32):
         super().__init__()
         self.lr = learning_rate
+        self.feature_length = feature_length
+        self.dim_mlp_layers = dim_mlp_layers
         self.traverse_stack = nn.Sequential(
-            nn.Linear(2 * n_states + 2 * d_out_traverse, d_hidden_traverse),
+            nn.Linear(2 * n_states + 2 * feature_length, dim_mlp_layers),
             nn.ReLU(),
-            nn.Linear(d_hidden_traverse, d_out_traverse),
+            nn.Linear(dim_mlp_layers, feature_length),
         )
+        self.d_model = 2 * feature_length
         self.encoder_layer = nn.TransformerEncoderLayer(
-            d_model=d_model,
+            d_model=self.d_model,
             nhead=nhead,
             dim_feedforward=dim_feedforward,
         )
         self.encoder = nn.TransformerEncoder(self.encoder_layer, layer_count)
-        self.classifier = nn.Linear(d_model, 1)
+        self.classifier = nn.Linear(self.d_model, 1)
         self.roc_metric = BinaryROC()
         self.auroc_metric = AUROC(task="binary")
         # Temporary storage for probabilities and targets
@@ -299,9 +300,9 @@ class TraverseNN(L.LightningModule):
         """
         max_seq_length = mutations.size(1)
         # for each node, we learn 2 features for each site (up and down)
-        # Features have length d_out_traverse
+        # Features have length self.feature_length
         learned_features = torch.zeros(
-            len(mutations), max_seq_length, 2, d_out_traverse
+            len(mutations), max_seq_length, 2, self.feature_length
         ).to(traversal.device)
         i_dir = 0
         for direction in traversal:  # upward vs downward
@@ -345,7 +346,7 @@ class TraverseNN(L.LightningModule):
 
         # concatenate features to one dimension
         learned_features = learned_features.reshape(
-            len(mutations), max_seq_length, 2 * d_out_traverse
+            len(mutations), max_seq_length, 2 * self.feature_length
         )
         return learned_features
 
@@ -373,10 +374,10 @@ class TraverseNN(L.LightningModule):
         for node in tree.traverse(strategy="postorder"):
             if node.is_leaf() or node.is_root() or node.up.is_root():
                 node.to_parent["clade_mutation_feature"] = torch.zeros(
-                    (max_seq_length, d_out_traverse)
+                    (max_seq_length, self.feature_length)
                 )
             else:
-                feature = torch.zeros((max_seq_length, d_out_traverse))
+                feature = torch.zeros((max_seq_length, self.feature_length))
                 try:
                     child1, child2 = node.children
                 except ValueError:
@@ -391,7 +392,7 @@ class TraverseNN(L.LightningModule):
                 node.to_parent["clade_mutation_feature"] = feature
         # leaf-ward traversal
         for node in tree.traverse(strategy="preorder"):
-            feature = torch.zeros((max_seq_length, d_out_traverse))
+            feature = torch.zeros((max_seq_length, self.feature_length))
             if node.is_root() or node.is_leaf():
                 node.from_parent["clade_mutation_feature"] = feature
             elif node.up.is_root():

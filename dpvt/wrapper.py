@@ -221,6 +221,8 @@ class Wrap:
         device="cpu",
         batch_size=1024,
         learning_rate=0.005,
+        feature_length=32,
+        dim_mlp_layers=32,
         epochs=200,
         hyperparameter_path="",
         profiling=False,
@@ -233,6 +235,7 @@ class Wrap:
         else:
             self.device = device
         self.profiling = profiling
+        self.accum_grad_batches = accum_grad_batches
 
         # If hyperparameter tuning has been done, read hyperparameters and use them from
         # training
@@ -242,11 +245,15 @@ class Wrap:
                 best_hyperparams = json.load(f)
             self.batch_size = best_hyperparams["batch_size"]
             self.learning_rate = best_hyperparams["learning_rate"]
+            self.feature_length = best_hyperparams["feature_length"]
+            self.dim_mlp_layers = best_hyperparams["dim_mlp_layers"]
         else:
             print("Use default parameters for ", log_path)
             # Initialize model with specified parameters
             self.batch_size = batch_size
             self.learning_rate = learning_rate
+            self.feature_length = feature_length
+            self.dim_mlp_layers = dim_mlp_layers
         if isinstance(model, type):
             # `model` is a class
             self.model = model(self.learning_rate)
@@ -294,7 +301,7 @@ class Wrap:
             max_epochs=self.epochs,
             callbacks=[checkpoint_callback, early_stop_callback],
             profiler=profiler,
-            accumulate_grad_batches=accum_grad_batches,
+            accumulate_grad_batches=self.accum_grad_batches,
         )
 
     def train(self, checkpoint):
@@ -321,7 +328,6 @@ class HyperWrap:
         val_data,
         log_path,
         device="cpu",
-        epochs=200,
         n_trials=10,
         checkpoint_dir="hyper_checkpoints/",
         profiling=False,
@@ -334,7 +340,6 @@ class HyperWrap:
             self.device = "cpu"
         else:
             self.device = device
-        self.epochs = epochs
         self.n_trials = n_trials
         self.checkpoint_dir = checkpoint_dir
         self.profiling = profiling
@@ -349,9 +354,13 @@ class HyperWrap:
         batch_size = trial.suggest_categorical(
             "batch_size", [2**x for x in range(4, 10)]
         )
+        accum_grad_batches = trial.suggest_categorical("accum_grad_batches", range(1, 10))
+        epochs = trial.suggest_categorical("epochs", range(1,300))
+        feature_length = trial.suggest_categorical("feature_length", [2**x for x in range(2,10)])
+        dim_mlp_layers = trial.suggest_categorical("dim_mlp_layers", [2**x for x in range(2,10)])
 
         # Setup model, data, and trainer
-        model = self.model(learning_rate)
+        model = self.model(learning_rate, feature_length, dim_mlp_layers)
         train_loader = DataLoader(
             self.train_data, batch_size=batch_size, collate_fn=custom_collate
         )
@@ -374,9 +383,10 @@ class HyperWrap:
             accelerator=self.device,
             devices=1,
             logger=logger,
-            max_epochs=self.epochs,
+            max_epochs=epochs,
             callbacks=[checkpoint_callback, early_stop_callback],
             profiler=profiler,
+            accumulate_grad_batches=accum_grad_batches
         )
 
         # Train the model
