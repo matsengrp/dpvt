@@ -261,23 +261,30 @@ class Wrap:
             # `model` is an instance of a class
             self.model = model
 
+        droplast=False
+        if self.batch_size <= 32:
+            # drop last batch if we observe small batch size
+            droplast = True
         self.train_loader = DataLoader(
             train_data,
             batch_size=self.batch_size,
             collate_fn=custom_collate,
             num_workers=10,
+            drop_last=droplast,
         )
         self.val_loader = DataLoader(
             val_data,
             batch_size=self.batch_size,
             collate_fn=custom_collate,
             num_workers=10,
+            drop_last=droplast,
         )
         self.test_loader = DataLoader(
             test_data,
             batch_size=self.batch_size,
             collate_fn=custom_collate,
             num_workers=10,
+            drop_last=droplast,
         )
 
         logger = TensorBoardLogger("lightning_logs/" + self.device + "_" + str(todays_date), name=self.log_path)
@@ -355,7 +362,8 @@ class HyperWrap:
             "batch_size", [2**x for x in range(4, 10)]
         )
         accum_grad_batches = trial.suggest_categorical("accum_grad_batches", range(1, 10))
-        epochs = trial.suggest_categorical("epochs", range(1,300))
+        # epochs = trial.suggest_categorical("epochs", range(1,300))
+        epochs = 200
         feature_length = trial.suggest_categorical("feature_length", [2**x for x in range(2,10)])
         dim_mlp_layers = trial.suggest_categorical("dim_mlp_layers", [2**x for x in range(2,10)])
 
@@ -408,6 +416,7 @@ class HyperWrap:
         study.optimize(self.objective, self.n_trials)
 
         best_hyperparameters = study.best_trial.params
+        print(best_hyperparameters)
         with open(hyperparams_filename, "w") as f:
             json.dump(best_hyperparameters, f)
 
