@@ -247,6 +247,7 @@ class Wrap:
             self.learning_rate = best_hyperparams["learning_rate"]
             self.feature_length = best_hyperparams["feature_length"]
             self.dim_mlp_layers = best_hyperparams["dim_mlp_layers"]
+            self.accum_grad_batches = best_hyperparams["accum_grad_batches"]
         else:
             print("Use default parameters for ", log_path)
             # Initialize model with specified parameters
@@ -262,7 +263,7 @@ class Wrap:
             self.model = model
 
         droplast=False
-        if self.batch_size <= 32:
+        if self.batch_size <= 64:
             # drop last batch if we observe small batch size
             droplast = True
         self.train_loader = DataLoader(
