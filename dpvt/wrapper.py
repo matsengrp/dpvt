@@ -8,6 +8,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 from torch.utils.data import Dataset
 from ete3 import Tree
 from datetime import datetime
+
 todays_date = datetime.now().strftime("%Y-%m-%d")
 
 import optuna
@@ -262,7 +263,7 @@ class Wrap:
             # `model` is an instance of a class
             self.model = model
 
-        droplast=False
+        droplast = False
         if self.batch_size <= 64:
             # drop last batch if we observe small batch size
             droplast = True
@@ -288,13 +289,19 @@ class Wrap:
             drop_last=droplast,
         )
 
-        logger = TensorBoardLogger("lightning_logs/" + self.device + "_" + str(todays_date), name=self.log_path)
-        checkpoint_callback = ModelCheckpoint(every_n_epochs=1, save_top_k=1)
-        # early stopping if overfitting occurs
+        logger = TensorBoardLogger(
+            "lightning_logs/" + self.device + "_" + str(todays_date), name=self.log_path
+        )
+        checkpoint_callback = ModelCheckpoint(
+            dirpath=self.log_path,
+            filename="{epoch}-{val_loss:.2f}",
+            every_n_epochs=10,
+            save_top_k=-1,
+        )
         early_stop_callback = EarlyStopping(
             monitor="val_loss",
-            patience=3,  # Number of epochs with no improvement after which training will be stopped
-            mode="min",  # Stop training when the quantity monitored has stopped decreasing
+            patience=3,
+            mode="min",
         )
         profiler = None
         if self.profiling:
@@ -362,11 +369,17 @@ class HyperWrap:
         batch_size = trial.suggest_categorical(
             "batch_size", [2**x for x in range(4, 10)]
         )
-        accum_grad_batches = trial.suggest_categorical("accum_grad_batches", range(1, 10))
+        accum_grad_batches = trial.suggest_categorical(
+            "accum_grad_batches", range(1, 10)
+        )
         # epochs = trial.suggest_categorical("epochs", range(1,300))
         epochs = 200
-        feature_length = trial.suggest_categorical("feature_length", [2**x for x in range(2,10)])
-        dim_mlp_layers = trial.suggest_categorical("dim_mlp_layers", [2**x for x in range(2,10)])
+        feature_length = trial.suggest_categorical(
+            "feature_length", [2**x for x in range(2, 10)]
+        )
+        dim_mlp_layers = trial.suggest_categorical(
+            "dim_mlp_layers", [2**x for x in range(2, 10)]
+        )
 
         # Setup model, data, and trainer
         model = self.model(learning_rate, feature_length, dim_mlp_layers)
@@ -377,7 +390,12 @@ class HyperWrap:
             self.val_data, batch_size=batch_size, collate_fn=custom_collate
         )
         logger = TensorBoardLogger(self.checkpoint_dir, name=self.log_path)
-        checkpoint_callback = ModelCheckpoint(every_n_epochs=10, save_top_k=-1)
+        checkpoint_callback = ModelCheckpoint(
+            dirpath=self.log_path,
+            filename="{epoch}-{val_loss:.2f}",
+            every_n_epochs=10,
+            save_top_k=-1,
+        )
         early_stop_callback = EarlyStopping(
             monitor="val_loss",  # Metric to monitor
             patience=3,  # Number of epochs with no improvement after which training will be stopped
@@ -395,7 +413,7 @@ class HyperWrap:
             max_epochs=epochs,
             callbacks=[checkpoint_callback, early_stop_callback],
             profiler=profiler,
-            accumulate_grad_batches=accum_grad_batches
+            accumulate_grad_batches=accum_grad_batches,
         )
 
         # Train the model
