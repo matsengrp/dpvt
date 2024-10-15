@@ -236,7 +236,9 @@ class TraverseNN(L.LightningModule):
         # assume input is a list (or iterable) of trees
         if type(input[0]) == Tree:
             max_seq_length = max([tree.sequence for tree in input])
-            logits = torch.stack([self.forward_on_tree(item, max_seq_length) for item in input])
+            logits = torch.stack(
+                [self.forward_on_tree(item, max_seq_length) for item in input]
+            )
         else:
             logits = torch.stack([self.forward_on_traversal(item) for item in input])
         return F.sigmoid(logits)
@@ -290,7 +292,9 @@ class TraverseNN(L.LightningModule):
         and corresponding mutations (for all sites), then aggregates and classifies.
         """
         learned_features = self.traversal_on_traversal(traversal, mutations)
+        attention_masks = (learned_features == 0)[:, :, 0].transpose(0, 1)
         encoder_output = self.encoder(learned_features)
+        encoder_output[attention_masks.transpose(0, 1)] = 0.0
         logit = self.classifier(encoder_output[:, 0])
         return logit
 
@@ -318,7 +322,11 @@ class TraverseNN(L.LightningModule):
                     break
                 if i_dir == 0:  # upward traversal
                     for i in range(max_seq_length):
-                        if mutations[adj_node1][i][0] == mutations[adj_node1][i][1] == -1:
+                        if (
+                            mutations[adj_node1][i][0]
+                            == mutations[adj_node1][i][1]
+                            == -1
+                        ):
                             # we are at a -1 row (padding)
                             break
                         self.traverse_node_aggregate(
@@ -330,11 +338,15 @@ class TraverseNN(L.LightningModule):
                         )
                 else:
                     for i in range(max_seq_length):
-                        if mutations[adj_node1][i][0] == mutations[adj_node1][i][1] == -1:
+                        if (
+                            mutations[adj_node1][i][0]
+                            == mutations[adj_node1][i][1]
+                            == -1
+                        ):
                             # we are at a -1 row (padding)
                             break
                         self.traverse_node_aggregate(
-                            - mutations[adj_node1][i],
+                            -mutations[adj_node1][i],
                             learned_features[adj_node1][i][i_dir],
                             mutations[adj_node2][i],
                             learned_features[adj_node2][i][
@@ -388,7 +400,11 @@ class TraverseNN(L.LightningModule):
                     )
                 for i in range(seq_length):
                     self.node_aggregate(
-                        child1.to_parent, child2.to_parent, feature_name, feature[i], site_idx=i
+                        child1.to_parent,
+                        child2.to_parent,
+                        feature_name,
+                        feature[i],
+                        site_idx=i,
                     )
                 node.to_parent["clade_mutation_feature"] = feature
         # leaf-ward traversal
@@ -408,7 +424,11 @@ class TraverseNN(L.LightningModule):
                 sister = node.get_sisters()[0]
                 for i in range(seq_length):
                     self.node_aggregate(
-                        parent.from_parent, sister.to_parent, feature_name, feature[i], site_idx=i
+                        parent.from_parent,
+                        sister.to_parent,
+                        feature_name,
+                        feature[i],
+                        site_idx=i,
                     )
                 node.from_parent["clade_mutation_feature"] = feature
         return tree
@@ -515,9 +535,9 @@ class TraverseNN(L.LightningModule):
 
 class TraverseMaxPooling(TraverseNN):
     """
-    Pytorch module inherited from TraverseNN, which replaces the site aggregation
-    by taking the maximum feature of the output of the MLP for classification
-    (maximum over all sites)
+    Pytorch module inherited from TraverseNN, which replaces the site
+    aggregation by taking the maximum feature of the output of the MLP for
+    classification (maximum over all sites)
     """
 
     def site_aggregate(self, tree):
@@ -540,11 +560,21 @@ class TraverseMaxPooling(TraverseNN):
         max_values, _ = torch.max(input_features, dim=1, keepdim=True)
         return max_values
 
+    def forward_on_traversal(self, traversal, mutations):
+        """
+        Compute features from traversal datastructure, given one tree/traversal
+        and corresponding mutations (for all sites), then aggregates and classifies.
+        """
+        learned_features = self.traversal_on_traversal(traversal, mutations)
+        output, _ = torch.max(learned_features, dim=1, keepdim=True)
+        logit = self.classifier(output[:, 0])
+        return logit
+
 
 class TraverseAvgPooling(TraverseNN):
     """
-    Pytorch module inherited from TraverseNN, which replaces the site aggregation
-    by taking the average of features over all sites
+    Pytorch module inherited from TraverseNN, which replaces the site
+    aggregation by taking the average of features over all sites
     """
 
     def site_aggregate(self, tree):
@@ -566,6 +596,16 @@ class TraverseAvgPooling(TraverseNN):
         )
         col_sums = input_features.mean(dim=1, keepdim=True)
         return col_sums
+
+    def forward_on_traversal(self, traversal, mutations):
+        """
+        Compute features from traversal datastructure, given one tree/traversal
+        and corresponding mutations (for all sites), then aggregates and classifies.
+        """
+        learned_features = self.traversal_on_traversal(traversal, mutations)
+        output = learned_features.mean(dim=1, keepdim=True)
+        logit = self.classifier(output[:, 0])
+        return logit
 
 
 class TransformerEncoderTraversal(TraverseNN):
