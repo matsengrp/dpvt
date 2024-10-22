@@ -258,15 +258,15 @@ class Wrap:
             self.dim_mlp_layers = dim_mlp_layers
         if isinstance(model, type):
             # `model` is a class
-            self.model = model(self.learning_rate)
+            self.model = model(self.learning_rate, self.feature_length, self.dim_mlp_layers)
         else:
             # `model` is an instance of a class
             self.model = model
 
         droplast = False
-        if self.batch_size <= 64:
-            # drop last batch if we observe small batch size
-            droplast = True
+        # if self.batch_size <= 64:
+        #     # drop last batch if we observe small batch size
+        #     droplast = True
         self.train_loader = DataLoader(
             train_data,
             batch_size=self.batch_size,
@@ -300,7 +300,7 @@ class Wrap:
         )
         early_stop_callback = EarlyStopping(
             monitor="val_loss",
-            patience=3,
+            patience=5,
             mode="min",
         )
         profiler = None
@@ -370,7 +370,7 @@ class HyperWrap:
             "batch_size", [2**x for x in range(4, 10)]
         )
         accum_grad_batches = trial.suggest_categorical(
-            "accum_grad_batches", range(1, 10)
+            "accum_grad_batches", range(1, 2)
         )
         # epochs = trial.suggest_categorical("epochs", range(1,300))
         epochs = 200
@@ -394,7 +394,7 @@ class HyperWrap:
             dirpath=self.log_path,
             filename="{epoch}-{val_loss:.2f}",
             every_n_epochs=10,
-            save_top_k=-1,
+            save_top_k=1,
         )
         early_stop_callback = EarlyStopping(
             monitor="val_loss",  # Metric to monitor
