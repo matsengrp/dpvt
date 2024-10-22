@@ -115,16 +115,13 @@ class TraverseNN(L.LightningModule):
                 self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
             ]
             pred = torch.stack(fw_output)
-        loss = self.masked_bce_loss(pred, yb, mask)
-        self.log("train_loss", loss, batch_size=len(train_batch[0]), on_epoch=True)
-        self.logger.experiment.add_scalars("loss", {"train": loss}, self.global_step)
-        # log predictions on positive- and negative-datapoints, and show data in console
-        # progress bar
         prob_predictions = F.sigmoid(pred)
         pos_predictions = prob_predictions[yb < 0.5]
         neg_predictions = prob_predictions[yb >= 0.5]
         self.log("pos_prediction_avg", torch.mean(pos_predictions), prog_bar=True)
         self.log("neg_prediction_avg", torch.mean(neg_predictions), prog_bar=True)
+        loss = self.masked_bce_loss(pred, yb, mask)
+        self.log("train_loss", loss, on_epoch=True)
         return loss
 
     def validation_step(self, val_batch, batch_idx):
@@ -147,8 +144,9 @@ class TraverseNN(L.LightningModule):
             ]
             pred = torch.stack(fw_output)
         loss = self.masked_bce_loss(pred, yb, mask)
-        self.log("val_loss", loss, batch_size=len(val_batch[0]))
-        self.logger.experiment.add_scalars("loss", {"valid": loss}, self.global_step)
+        self.log('val_loss', loss, on_epoch=True, prog_bar=True)
+        # Return the batch loss so it can be accumulated later
+        return loss
 
     def test_step(self, test_batch):
         if type(test_batch[0][0]) == Tree:
@@ -172,7 +170,7 @@ class TraverseNN(L.LightningModule):
         # only get unmasked output
         masked_pred = pred[mask]
         masked_yb = yb[mask].unsqueeze(-1).int()
-        self.test_probs.append(masked_pred.detach())
+        self.test_probs.append(masked_pred)
         self.test_targets.append(masked_yb)
         if torch.numel(masked_yb) > 0:  # Check if there are any unmasked elements
             self.auroc_metric(masked_pred, masked_yb)
@@ -182,10 +180,32 @@ class TraverseNN(L.LightningModule):
             warnings.warn("Your test data is very small, or there is a bug")
         return {}
 
+    def on_validation_epoch_end(self):
+        # average validation loss over epoch and plot
+        outputs = self.trainer.callback_metrics
+        avg_val_loss = outputs['val_loss']
+        self.log('val_loss', avg_val_loss, on_epoch=True, prog_bar=True)
+        self.logger.experiment.add_scalars(
+            "loss",
+            {"valid": avg_val_loss},
+            self.current_epoch
+        )
+
+    def on_train_epoch_end(self):
+        # average training loss over epoch and plot
+        outputs = self.trainer.callback_metrics
+        avg_train_loss = outputs['train_loss']
+        if avg_train_loss is not None:
+            self.logger.experiment.add_scalars(
+                "loss",
+                {"train": avg_train_loss},
+                self.current_epoch
+            )
+
     def on_test_epoch_end(self):
         """
-        Summarize testing statistics (AUROC and ROC) at end of testing and adds them to
-        logging. The ROC curve is added as figure to self.logger.
+        Summarize testing statistics (AUROC and ROC) at end of testing and adds
+        them to logging. The ROC curve is added as figure to self.logger.
         """
         logits = torch.cat(self.test_probs, dim=0)
         targets = torch.cat(self.test_targets, dim=0)
@@ -194,8 +214,7 @@ class TraverseNN(L.LightningModule):
         auroc = self.auroc_metric.compute()
         self.log("test_auroc", auroc, on_step=False, on_epoch=True)
 
-        self.roc_metric.update(probs, targets)
-        fpr, tpr, thresholds = self.roc_metric.compute()
+        fpr, tpr, thresholds = self.roc_metric(probs, targets)
         fpr = fpr.cpu()
         tpr = tpr.cpu()
 
@@ -287,15 +306,17 @@ class TraverseNN(L.LightningModule):
         output_feature.copy_(output)
 
     def forward_on_traversal(self, traversal, mutations):
-        """
+        """summarized_features = encoder_output.mean(dim=0)
         Compute features from traversal datastructure, given one tree/traversal
         and corresponding mutations (for all sites), then aggregates and classifies.
         """
         learned_features = self.traversal_on_traversal(traversal, mutations)
-        attention_masks = (learned_features == 0)[:, :, 0].transpose(0, 1)
-        encoder_output = self.encoder(learned_features)
-        encoder_output[attention_masks.transpose(0, 1)] = 0.0
-        logit = self.classifier(encoder_output[:, 0])
+        learned_features.transpose(0,1)
+        attention_masks = (learned_features == 0)
+        attention_masks = attention_masks[:,:,0].transpose(0,1)
+        encoder_output = self.encoder(learned_features, src_key_padding_mask=attention_masks)
+        summarized_features = encoder_output.mean(dim=1)
+        logit = self.classifier(summarized_features)
         return logit
 
     def traversal_on_traversal(self, traversal, mutations):
@@ -356,7 +377,6 @@ class TraverseNN(L.LightningModule):
                             learned_features[current_node][i][i_dir],
                         )
             i_dir += 1
-
         # concatenate features to one dimension
         learned_features = learned_features.reshape(
             len(mutations), max_seq_length, 2 * self.feature_length
@@ -599,8 +619,8 @@ class TraverseAvgPooling(TraverseNN):
 
     def forward_on_traversal(self, traversal, mutations):
         """
-        Compute features from traversal datastructure, given one tree/traversal
-        and corresponding mutations (for all sites), then aggregates and classifies.
+        Compute features from traversal data structure, given one tree/traversal
+        and corresponding mutations (for all sites), then aggregate and classify.
         """
         learned_features = self.traversal_on_traversal(traversal, mutations)
         output = learned_features.mean(dim=1, keepdim=True)
