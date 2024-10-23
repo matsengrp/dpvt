@@ -312,10 +312,10 @@ class TraverseNN(L.LightningModule):
         """
         learned_features = self.traversal_on_traversal(traversal, mutations)
         learned_features.transpose(0,1)
-        attention_masks = (learned_features == 0)
-        attention_masks = attention_masks[:,:,0].transpose(0,1)
+        attention_masks = (learned_features == 0).any(dim=2).transpose(0,1).double()
         encoder_output = self.encoder(learned_features, src_key_padding_mask=attention_masks)
         summarized_features = encoder_output.mean(dim=1)
+
         logit = self.classifier(summarized_features)
         return logit
 
