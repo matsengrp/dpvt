@@ -230,7 +230,6 @@ class Wrap:
         accum_grad_batches=1,
     ):
         self.log_path = log_path
-        self.epochs = epochs
         if device == "cpu-tree-dataset":
             self.device = "cpu"
         else:
@@ -249,6 +248,7 @@ class Wrap:
             self.feature_length = best_hyperparams["feature_length"]
             self.dim_mlp_layers = best_hyperparams["dim_mlp_layers"]
             self.accum_grad_batches = best_hyperparams["accum_grad_batches"]
+            self.epochs = best_hyperparams["epochs"]
         else:
             print("Use default parameters for ", log_path)
             # Initialize model with specified parameters
@@ -256,6 +256,7 @@ class Wrap:
             self.learning_rate = learning_rate
             self.feature_length = feature_length
             self.dim_mlp_layers = dim_mlp_layers
+            self.epochs = epochs
         if isinstance(model, type):
             # `model` is a class
             self.model = model(self.learning_rate, self.feature_length, self.dim_mlp_layers)
