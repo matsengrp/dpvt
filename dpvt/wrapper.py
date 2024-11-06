@@ -438,7 +438,6 @@ class HyperWrap:
         study.optimize(self.objective, self.n_trials)
 
         best_hyperparameters = study.best_trial.params
-        print(best_hyperparameters)
         with open(hyperparams_filename, "w") as f:
             json.dump(best_hyperparameters, f)
 
