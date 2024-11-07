@@ -1,6 +1,7 @@
 # dpvt
 Deep (neural networks for) Phylogenetics Via Traversals
 
+
 ## Installation
 
 ```bash
@@ -17,6 +18,7 @@ pip install -e .
 ## Training Data
 
 Currently, datasets are stored in the `dpvt-experiments-1` repository.
+
 
 ### Data format
 
@@ -53,13 +55,14 @@ this is set in the `dpvt-experiments-1` repo.
     - dimension: `(num_trees,
 	num_nodes)`
 
-Note that if  input trees are of different sizes, `traversal`, `mutations`, and
+Note that if input trees have different number of taxa and/or the sequences on
+leaves have different lengths in different trees, `traversal`, `mutations`, and
 `labels` are padded with `-1`, masks are padded with `False`.
 
 When iterating through the TraversalDataset in the forward function, we stop as
-soon as we see `-1` in the traversal tensor, as this means that we reached the
-padding. And with the masks set to False for all those indiced, none of the `-1`
-are being used for calculating the loss.
+soon as we see two `-1` in the traversal tensor, as this means that we reached
+the padding. With the masks set to False for all those padded entries in the
+mutations tensor, none of the `-1` are being used for calculating the loss.
 
 
 #### TreeDataset
@@ -81,20 +84,50 @@ are being used for calculating the loss.
 
 We define a Pytorch module `TraverseNN` which evaluates whether edges in a given
 labeled tree appear in a maximum parsimony tree, for the given sequences on the
-leaf nodes. This module is defined in `dpvt/neural_network/models.py`.
+leaf nodes. This module is defined in `dpvt/models.py`.
 
-The model works as follows (for `TreeDataset`s):
+In the following we describe how the models work for the two different data
+structures lined out above. Though the description of the models is slightly
+different for the two datasets, they two versions are doing the exact same
+thing. The advantage of the `TraversalDataset` is, however, that it uses
+`torch.tensor`s only can can therefore be run on GPUs.
 
-0. We assume an input tree has a `sequence` attribute on each node, which is a
-   string consisting of the characters `A`, `G`, `C`, `T`.
 
-1. Edge mutation annotation: At each node, we assign a `edge_mutation` attribute
+#### For `TraversalDataset`:
+
+1. Traversal step: traverse the tree by iterating through the `traversal` tensor
+  to learn features for each node that are saved in the `learned_features`
+  tensor. Due to the setup, iterating through `traversal` will automatically
+  first apply the upward and then the downward traversal of the tree. When we
+  are at an element `(node1, node2, node3)` of the tensor, we input the part of
+  the `mutations` and `learned_features` tensor corresponding to `node1` and
+  `node2` into our RNN to learn the `learned_features` of `node3`. For each node
+  triple we iterate over all sites of the alignments, to the feature for `node3`
+  is learned separately for each site of the sequences.
+
+2. Site-aggregation step: 
+  We apply a transformer to combine the `learned_features` over all sites. The
+  `learned_features` are the input and the output is a tensor of the same size.
+  We then average the output over all sites to be our final feature for each
+  node.
+
+3. Final output step: The output from the previous step is passed through a
+linear layer, the `classifier` attribute, to produce a tensor in logit space, of
+dimension `(n_nodes)`. Then a sigmoid function is applied. At entry $i$, values
+near `0.0` mean the $i$-th edge is in a maximum parsimony tree, while values
+near `1.0` mean the $i$-th edge is not in a maximum parsimony tree. The output
+values are arranged to correspond to edges in preorder traversal order.
+
+
+#### For `TreeDataset`:
+
+0. Edge mutation annotation: At each node, we assign a `edge_mutation` attribute
 which encodes the difference between the node's `sequence` and its parent's
 `sequence`. The `edge_mutation` attribute is a pytorch tensor of dimension
 `(n_sites, 4)`. A mutation `A -> T` from parent to child is encoded as `[...,
 [-1, 1, 0, 0], ...]`.
 
-2. Traversal step: We apply two traversals to the tree, combining mutation data
+1. Traversal step: We apply two traversals to the tree, combining mutation data
    across the tree. This step applies to each site separately.  
     - Post-order traversal: We first traverse the tree root-ward, where at each
     step we assign a node the attribute `node.to_parent["clade_mutation"]`, a
@@ -114,7 +147,7 @@ which encodes the difference between the node's `sequence` and its parent's
     tensors of the parent node and the `node.to_parent[edge_mutation]` and
     `node.to_parent[clade_mutation]` tensors of the sister node.
 
-3. Site-aggregation step: We apply a transformer encoder to combine the clade
+2. Site-aggregation step: We apply a transformer encoder to combine the clade
 mutation data across sites. This uses the `encoder` attribute. As input, we
 concatenate the tensors `node.to_parent["clade_mutation"]` and
 `node.from_parent["clade_mutation"]`, to form a tensor of dimension `(n_sites,
@@ -122,38 +155,33 @@ concatenate the tensors `node.to_parent["clade_mutation"]` and
 size-`8` tensor, is kept. These tensors from each node are stacked together in
 preorder-traversal order, forming a tensor of dimension `(n_nodes, 8)`.
 
-4. Final output step: The output from the previous step is passed through a
+3. Final output step: The output from the previous step is passed through a
 linear layer, the `classifier` attribute, to produce a tensor in logit space, of
-dimension `(n_nodes)`. The a sigmoid is applied. At entry $i$, values near `0.0`
-mean the $i$-th edge is in a maximum parsimony tree, while values near `1.0`
-mean the $i$-th edge is not in a maximum parsimony tree. The output values are
-arranged to correspond to edges in preorder traversal order.
-
-
-If the `TraverseDataset` data structure is used, we save features in a tensor
-and iterate through the `traversal` to compute the features. Everything else is
-completely identical to how things are handled when using `TreeDataset`s.
+dimension `(n_nodes)`. Then a sigmoid function is applied. At entry $i$, values
+near `0.0` mean the $i$-th edge is in a maximum parsimony tree, while values
+near `1.0` mean the $i$-th edge is not in a maximum parsimony tree. The output
+values are arranged to correspond to edges in preorder traversal order.
 
 
 ### TransformerEncoderTraversal
 
 This Pytorch module inherits from `TraverseNN` and changes the order of the
 steps described for this module to first aggregate per-site information at every
-node of a tree (step 3.) and then use the learned features for the tree
-traversal (step 2.).
+node of a tree (step 2.) and then use the learned features for the tree
+traversal (step 1.).
 
 ### TraverseMaxPooling
 
-This model is very similar to `TraverseNN`, but we replace step 3. with a
+This model is very similar to `TraverseNN`, but we replace step 2. with a
 simpler aggregation method. We aggregate sites by simply outputting as feature
-the maximum of `feature[i]` over all sites.
+the maximum of `learned_features[i]` over all sites.
 
 
 ### TraverseAvgPooling
 
-This model is very similar to `TraverseNN`, but we replace step 3. with a
+This model is very similar to `TraverseNN`, but we replace step 2. with a
 simpler aggregation method. We aggregate sites by simply outputting as feature
-the average of `feature[i]` over all sites.
+the average of `learned_features[i]` over all sites.
 
 
 ## Logging training
@@ -169,10 +197,13 @@ performance of classification on the test set.
 
 - `wrapper.py`: contains wrappers for a model and a dataset.
 
+
 ### File structure of companion repo `dpvt-experiments-1`
 
 - `dpvtex`: contains `dpvt_data.py`, which implements functions to get datasets
   for a given nickname and `dpvt_zoo.py`, which creates models for a given
-  nickname. These nicknames are provided to the `Snakefile` in `config.yaml`.
+  nickname. These nicknames are provided to the `Snakefile` in `config.yaml`. It
+  furthermore contains scripts to generate training and testing data. More
+  details can be found in the README of the `dpvt-experiments-1` repo.
 - `train`: contains `Snakefile` and `config.yaml`, in which models and datasets
   for training are specified.
