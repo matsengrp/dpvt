@@ -21,15 +21,16 @@ n_states = len(STATES)
 learning_rate = 0.01
 
 # traverse stack parameters
-d_out_traverse = 4
 d_hidden_traverse = 32
 
 # site-aggregate transformer parameters
 nhead = 2
-d_model = 2 * d_out_traverse  # size of embedding that we feed into site-aggregator,
 # coming from concatenating the traversal output-feature in two directions across edge
 dim_feedforward = 8
 layer_count = 4
+
+# for matrix multiplications with Tensor Cores
+torch.set_float32_matmul_precision("high")
 
 
 class TraverseNN(L.LightningModule):
@@ -56,26 +57,33 @@ class TraverseNN(L.LightningModule):
             present in a maximum parsimony tree
     """
 
-    def __init__(self, learning_rate=0.01):
+    def __init__(self, learning_rate=0.01, feature_length=32, dim_mlp_layers=32):
         super().__init__()
         self.lr = learning_rate
+        self.feature_length = feature_length
+        self.dim_mlp_layers = dim_mlp_layers
         self.traverse_stack = nn.Sequential(
-            nn.Linear(2 * n_states + 2 * d_out_traverse, d_hidden_traverse),
+            nn.Linear(2 * n_states + 2 * feature_length, dim_mlp_layers),
             nn.ReLU(),
-            nn.Linear(d_hidden_traverse, d_out_traverse),
+            nn.Linear(dim_mlp_layers, feature_length),
         )
+        self.d_model = 2 * feature_length
         self.encoder_layer = nn.TransformerEncoderLayer(
-            d_model=d_model,
+            d_model=self.d_model,
             nhead=nhead,
             dim_feedforward=dim_feedforward,
         )
         self.encoder = nn.TransformerEncoder(self.encoder_layer, layer_count)
-        self.classifier = nn.Linear(d_model, 1)
+        self.classifier = nn.Linear(self.d_model, 1)
         self.roc_metric = BinaryROC()
         self.auroc_metric = AUROC(task="binary")
         # Temporary storage for probabilities and targets
         self.test_probs = []
         self.test_targets = []
+
+    def data_to_device(self, dataset, device):
+        for data in dataset:
+            data = data.to(device)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
@@ -89,54 +97,126 @@ class TraverseNN(L.LightningModule):
         return masked_loss.mean()
 
     def training_step(self, train_batch, batch_idx):
-        xb, yb, mask = train_batch
-        pred = torch.stack([self.forward_on_tree(item) for item in xb])
-        loss = self.masked_bce_loss(pred, yb, mask)
-        self.log("train_loss", loss, batch_size=len(xb), on_epoch=True)
-        # log predictions on positive- and negative-datapoints, and show data in console
-        # progress bar
+        if type(train_batch[0][0]) == Tree:
+            xb, yb, mask = train_batch
+            max_seq_length = max([len(tree.sequence) for tree in xb])
+            # needed for padding if trees have different lengths sequences
+            fw_output = [self.forward_on_tree(item, max_seq_length) for item in xb]
+            # padding if trees have varying number of leaves
+            max_length = yb.size(1)
+            padded_fw_output = [
+                F.pad(l, (0, 0, 0, max_length - l.size(0))) for l in fw_output
+            ]
+            pred = torch.stack(padded_fw_output)
+        else:
+            traversal, mutations, yb, mask = train_batch
+            self.data_to_device([traversal, mutations, yb, mask], self.device)
+            fw_output = [
+                self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
+            ]
+            pred = torch.stack(fw_output)
         prob_predictions = F.sigmoid(pred)
         pos_predictions = prob_predictions[yb < 0.5]
         neg_predictions = prob_predictions[yb >= 0.5]
         self.log("pos_prediction_avg", torch.mean(pos_predictions), prog_bar=True)
         self.log("neg_prediction_avg", torch.mean(neg_predictions), prog_bar=True)
+        loss = self.masked_bce_loss(pred, yb, mask)
+        self.log("train_loss", loss, on_epoch=True, batch_size = len(yb))
         return loss
 
     def validation_step(self, val_batch, batch_idx):
-        xb, yb, mask = val_batch
-        pred = torch.stack([self.forward_on_tree(item) for item in xb])
+        if type(val_batch[0][0]) == Tree:
+            xb, yb, mask = val_batch
+            max_seq_length = max([len(tree.sequence) for tree in xb])
+            # needed for padding if trees have different lengths sequences
+            fw_output = [self.forward_on_tree(item, max_seq_length) for item in xb]
+            # padding if trees have varying number of leaves
+            max_length = yb.size(1)
+            padded_fw_output = [
+                F.pad(l, (0, 0, 0, max_length - l.size(0))) for l in fw_output
+            ]
+            pred = torch.stack(padded_fw_output)
+        else:
+            traversal, mutations, yb, mask = val_batch
+            self.data_to_device([traversal, mutations, yb, mask], self.device)
+            fw_output = [
+                self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
+            ]
+            pred = torch.stack(fw_output)
         loss = self.masked_bce_loss(pred, yb, mask)
-        self.log("val_loss", loss, batch_size=len(xb))
+        self.log('val_loss', loss, on_epoch=True, prog_bar=True, batch_size = len(yb))
+        # Return the batch loss so it can be accumulated later
+        return loss
 
     def test_step(self, test_batch):
-        xb, yb, mask = test_batch
-        pred = self(xb)
+        if type(test_batch[0][0]) == Tree:
+            xb, yb, mask = test_batch
+            max_seq_length = max([len(tree.sequence) for tree in xb])
+            # needed for padding if trees have different lengths sequences
+            fw_output = [self.forward_on_tree(item, max_seq_length) for item in xb]
+            # padding if trees have varying number of leaves
+            max_length = yb.size(1)
+            padded_fw_output = [
+                F.pad(l, (0, 0, 0, max_length - l.size(0))) for l in fw_output
+            ]
+            pred = torch.stack(padded_fw_output)
+        else:
+            traversal, mutations, yb, mask = test_batch
+            self.data_to_device([traversal, mutations, yb, mask], self.device)
+            fw_output = [
+                self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
+            ]
+            pred = torch.stack(fw_output)
         # only get unmasked output
         masked_pred = pred[mask]
         masked_yb = yb[mask].unsqueeze(-1).int()
-        self.test_probs.append(masked_pred.detach())
+        self.test_probs.append(masked_pred)
         self.test_targets.append(masked_yb)
         if torch.numel(masked_yb) > 0:  # Check if there are any unmasked elements
             self.auroc_metric(masked_pred, masked_yb)
             loss = self.masked_bce_loss(pred, yb, mask)
-            self.log("test_loss", loss, batch_size=len(xb))
+            self.log("test_loss", loss, batch_size=len(yb))
         else:
             warnings.warn("Your test data is very small, or there is a bug")
         return {}
 
+    def on_validation_epoch_end(self):
+        # average validation loss over epoch and plot
+        outputs = self.trainer.callback_metrics
+        avg_val_loss = outputs['val_loss']
+        # self.log('val_loss', avg_val_loss, on_epoch=True, batch_size = len(), prog_bar=True)
+        self.logger.experiment.add_scalars(
+            "loss",
+            {"valid": avg_val_loss},
+            self.current_epoch
+        )
+
+    def on_train_epoch_end(self):
+        # average training loss over epoch and plot
+        outputs = self.trainer.callback_metrics
+        avg_train_loss = outputs['train_loss']
+        if avg_train_loss is not None:
+            self.logger.experiment.add_scalars(
+                "loss",
+                {"train": avg_train_loss},
+                self.current_epoch
+            )
+
     def on_test_epoch_end(self):
         """
-        Summarize testing statistics (AUROC and ROC) at end of testing and adds them to
-        logging. The ROC curve is added as figure to self.logger.
+        Summarize testing statistics (AUROC and ROC) at end of testing and adds
+        them to logging. The ROC curve is added as figure to self.logger.
         """
-        probs = torch.cat(self.test_probs, dim=0)
+        logits = torch.cat(self.test_probs, dim=0)
         targets = torch.cat(self.test_targets, dim=0)
+        probs = torch.sigmoid(logits)
 
         auroc = self.auroc_metric.compute()
         self.log("test_auroc", auroc, on_step=False, on_epoch=True)
 
-        self.roc_metric.update(probs, targets)
-        fpr, tpr, thresholds = self.roc_metric.compute()
+        fpr, tpr, thresholds = self.roc_metric(probs, targets)
+        fpr = fpr.cpu()
+        tpr = tpr.cpu()
 
         fig, ax = plt.subplots()
         ax.plot(fpr, tpr, label=f"AUROC: {auroc:.2f}")
@@ -169,13 +249,20 @@ class TraverseNN(L.LightningModule):
         """
         if not optimized:
             if type(input) == Tree:
-                logit = self.forward_on_tree(input)
+                max_seq_length = len(input.sequence)
+                logit = self.forward_on_tree(input, max_seq_length)
                 return F.sigmoid(logit)
         # assume input is a list (or iterable) of trees
-        logits = torch.stack([self.forward_on_tree(item) for item in input])
+        if type(input[0]) == Tree:
+            max_seq_length = max([tree.sequence for tree in input])
+            logits = torch.stack(
+                [self.forward_on_tree(item, max_seq_length) for item in input]
+            )
+        else:
+            logits = torch.stack([self.forward_on_traversal(item) for item in input])
         return F.sigmoid(logits)
 
-    def forward_on_tree(self, tree: Tree):
+    def forward_on_tree(self, tree: Tree, max_seq_length):
         """
         Takes an ete3.Tree as input and outputs a list of 0's and 1's to indicate
         whether each edge on the input tree is present in a maximally parsimonious tree
@@ -185,16 +272,123 @@ class TraverseNN(L.LightningModule):
                 consisting of the characters A, G, C, T
         """
         self.assign_mutation_vectors(tree)
-        self.compute_features_via_traversal(tree, len(tree.sequence))
+        self.compute_features_via_traversal(tree, max_seq_length)
         encoder_output = self.site_aggregate(tree)
         # encoder_output dim = (n_nodes, 1, 8)
-        logit = self.classifier(encoder_output[:, 0])
+        summarized_features = encoder_output.mean(dim=1)
+        logit = self.classifier(summarized_features)
         return logit
+
+    def traverse_node_aggregate(
+        self,
+        first_node_mutations,
+        first_node_feature,
+        second_node_mutations,
+        second_node_feature,
+        output_feature,
+    ):
+        """
+        Takes in feature vectors from two neighbor-nodes of a given node, and outputs
+        the feature vector for that node.
+        The two neighbor-nodes can be either:
+            - two children of a node, during root-ward traversal, or
+            - one parent and one sister of a node, during leaf-ward traversal.
+        """
+        combined_data = torch.cat(
+            (
+                first_node_mutations,
+                first_node_feature,
+                second_node_mutations,
+                second_node_feature,
+            ),
+            dim=0,
+        )
+        output = self.traverse_stack(combined_data)
+        output_feature.copy_(output)
+
+    def forward_on_traversal(self, traversal, mutations):
+        """summarized_features = encoder_output.mean(dim=0)
+        Compute features from traversal datastructure, given one tree/traversal
+        and corresponding mutations (for all sites), then aggregates and classifies.
+        """
+        with torch.autograd.profiler.record_function("forward"):
+            learned_features = self.traversal_on_traversal(traversal, mutations)
+            learned_features.transpose(0,1)
+            attention_masks = (learned_features == 0).any(dim=2).transpose(0,1).double()
+            encoder_output = self.encoder(learned_features, src_key_padding_mask=attention_masks)
+            summarized_features = encoder_output.mean(dim=1)
+
+            logit = self.classifier(summarized_features)
+        return logit
+
+    def traversal_on_traversal(self, traversal, mutations):
+        """
+        Compute features from traversal datastructure, given one tree/traversal
+        and corresponding mutations (for all sites).
+        """
+        max_seq_length = mutations.size(1)
+        # for each node, we learn 2 features for each site (up and down)
+        # Features have length self.feature_length
+        learned_features = torch.zeros(
+            len(mutations), max_seq_length, 2, self.feature_length
+        ).to(traversal.device)
+        i_dir = 0
+        for direction in traversal:  # upward vs downward
+            for node_list in direction:
+                # first two nodes in list have feature already, we learn feature for third node in list
+                current_node = int(node_list[2])
+                # adjacent nodes (either children or sibling and parent)
+                adj_node1 = int(node_list[0])
+                adj_node2 = int(node_list[1])
+                if current_node == adj_node1 == adj_node2:
+                    # stop if we are in padded part of traversal representation
+                    break
+                if i_dir == 0:  # upward traversal
+                    for i in range(max_seq_length):
+                        if (
+                            mutations[adj_node1][i][0]
+                            == mutations[adj_node1][i][1]
+                            == -1
+                        ):
+                            # we are at a -1 row (padding)
+                            break
+                        self.traverse_node_aggregate(
+                            mutations[adj_node1][i],
+                            learned_features[adj_node1][i][i_dir],
+                            mutations[adj_node2][i],
+                            learned_features[adj_node2][i][i_dir],
+                            learned_features[current_node][i][i_dir],
+                        )
+                else:
+                    for i in range(max_seq_length):
+                        if (
+                            mutations[adj_node1][i][0]
+                            == mutations[adj_node1][i][1]
+                            == -1
+                        ):
+                            # we are at a -1 row (padding)
+                            break
+                        self.traverse_node_aggregate(
+                            -mutations[adj_node1][i],
+                            learned_features[adj_node1][i][i_dir],
+                            mutations[adj_node2][i],
+                            learned_features[adj_node2][i][
+                                0
+                            ],  # feature for sibling taken from upwards traversal
+                            # -, bc from_parent mutations instead of to_parent
+                            learned_features[current_node][i][i_dir],
+                        )
+            i_dir += 1
+        # concatenate features to one dimension
+        learned_features = learned_features.reshape(
+            len(mutations), max_seq_length, 2 * self.feature_length
+        )
+        return learned_features
 
     def compute_features_via_traversal(
         self,
         tree: Tree,
-        seq_length,
+        max_seq_length,
         feature_name="edge_mutation",
     ):
         """
@@ -211,19 +405,14 @@ class TraverseNN(L.LightningModule):
                 are used for encoding
         """
         # root-ward traversal
+        seq_length = len(tree.sequence)
         for node in tree.traverse(strategy="postorder"):
-            if node.is_leaf():
+            if node.is_leaf() or node.is_root() or node.up.is_root():
                 node.to_parent["clade_mutation_feature"] = torch.zeros(
-                    (seq_length, d_out_traverse)
+                    (max_seq_length, self.feature_length)
                 )
-            elif len(node.children) == 1:  # node is root with single child
-                assert node.up is None
-                child = node.children[0]
-                node.to_parent["clade_mutation_feature"] = child.to_parent[
-                    "clade_mutation_feature"
-                ]
             else:
-                feature = torch.zeros((seq_length, d_out_traverse))
+                feature = torch.zeros((max_seq_length, self.feature_length))
                 try:
                     child1, child2 = node.children
                 except ValueError:
@@ -232,14 +421,18 @@ class TraverseNN(L.LightningModule):
                         "{len(node.children)} children"
                     )
                 for i in range(seq_length):
-                    feature[i] = self.node_aggregate(
-                        child1.to_parent, child2.to_parent, feature_name, site_idx=i
+                    self.node_aggregate(
+                        child1.to_parent,
+                        child2.to_parent,
+                        feature_name,
+                        feature[i],
+                        site_idx=i,
                     )
                 node.to_parent["clade_mutation_feature"] = feature
         # leaf-ward traversal
         for node in tree.traverse(strategy="preorder"):
-            feature = torch.zeros((seq_length, d_out_traverse))
-            if node.is_root():
+            feature = torch.zeros((max_seq_length, self.feature_length))
+            if node.is_root() or node.is_leaf():
                 node.from_parent["clade_mutation_feature"] = feature
             elif node.up.is_root():
                 assert (
@@ -252,8 +445,12 @@ class TraverseNN(L.LightningModule):
                 assert len(node.get_sisters()) == 1
                 sister = node.get_sisters()[0]
                 for i in range(seq_length):
-                    feature[i] = self.node_aggregate(
-                        parent.from_parent, sister.to_parent, feature_name, site_idx=i
+                    self.node_aggregate(
+                        parent.from_parent,
+                        sister.to_parent,
+                        feature_name,
+                        feature[i],
+                        site_idx=i,
                     )
                 node.from_parent["clade_mutation_feature"] = feature
         return tree
@@ -263,7 +460,7 @@ class TraverseNN(L.LightningModule):
         Takes a tensor encoding site-wise mutations on subclades of a tree and
         aggregates its n_sites using a Transformer
         """
-        input_features = torch.stack(
+        learned_features = torch.stack(
             [
                 torch.cat(
                     (
@@ -275,19 +472,19 @@ class TraverseNN(L.LightningModule):
                 for node in tree.traverse(strategy="preorder")
             ]
         )
-        # input_features dim = (n_nodes, n_sites, d_model=8)
-        ## debug
-        # print("input:", input_features)
-        # print("input dim:", input_features.size())
-        out = self.encoder(input_features)
+        # learned_features dim = (n_nodes, n_sites, d_model=8)
+        learned_features.transpose(0,1)
+        attention_masks = (learned_features == 0).any(dim=2).transpose(0,1).double()
+        encoder_output = self.encoder(learned_features, src_key_padding_mask=attention_masks)
         # out dim = (n_nodes, n_sites, d_model=8)
-        return out
+        return encoder_output
 
     def node_aggregate(
         self,
         first_node_dict,
         second_node_dict,
         feature_name,
+        output_feature,
         site_idx,
         symmetrize=False,
     ):
@@ -298,26 +495,28 @@ class TraverseNN(L.LightningModule):
             - two children of a node, during root-ward traversal, or
             - one parent and one sister of a node, during leaf-ward traversal.
         """
-        i = site_idx
-        first_data = torch.cat(
+        combined_data = torch.cat(
             (
-                first_node_dict[feature_name][i],
-                first_node_dict["clade_mutation_feature"][i],
+                first_node_dict[feature_name][site_idx],
+                first_node_dict["clade_mutation_feature"][site_idx],
+                second_node_dict[feature_name][site_idx],
+                second_node_dict["clade_mutation_feature"][site_idx],
             ),
             dim=0,
         )
-        second_data = torch.cat(
-            (
-                second_node_dict[feature_name][i],
-                second_node_dict["clade_mutation_feature"][i],
-            ),
-            dim=0,
-        )
-        combined_data = torch.cat((first_data, second_data))
         output = self.traverse_stack(combined_data)
         if symmetrize:
-            output += self.traverse_stack(torch.cat((first_data, second_data)))
-        return output
+            output += self.traverse_stack(
+                torch.cat(
+                    (
+                        first_node_dict[feature_name][site_idx],
+                        first_node_dict["clade_mutation_feature"][site_idx],
+                        second_node_dict[feature_name][site_idx],
+                        second_node_dict["clade_mutation_feature"][site_idx],
+                    )
+                )
+            )
+        output_feature.copy_(output)
 
     @staticmethod
     def assign_mutation_vectors(tree):
@@ -360,9 +559,9 @@ class TraverseNN(L.LightningModule):
 
 class TraverseMaxPooling(TraverseNN):
     """
-    Pytorch module inherited from TraverseNN, which replaces the site aggregation
-    by taking the maximum feature of the output of the MLP for classification
-    (maximum over all sites)
+    Pytorch module inherited from TraverseNN, which replaces the site
+    aggregation by taking the maximum feature of the output of the MLP for
+    classification (maximum over all sites)
     """
 
     def site_aggregate(self, tree):
@@ -385,12 +584,40 @@ class TraverseMaxPooling(TraverseNN):
         max_values, _ = torch.max(input_features, dim=1, keepdim=True)
         return max_values
 
+    def forward_on_traversal(self, traversal, mutations):
+        """
+        Compute features from traversal datastructure, given one tree/traversal
+        and corresponding mutations (for all sites), then aggregates and classifies.
+        """
+        learned_features = self.traversal_on_traversal(traversal, mutations)
+        output, _ = torch.max(learned_features, dim=1, keepdim=True)
+        logit = self.classifier(output[:, 0])
+        return logit
+
 
 class TraverseAvgPooling(TraverseNN):
     """
-    Pytorch module inherited from TraverseNN, which replaces the site aggregation
-    by taking the average of features over all sites
+    Pytorch module inherited from TraverseNN, which replaces the site
+    aggregation by taking the average of features over all sites
     """
+
+    def __init__(self, learning_rate=0.01, feature_length=32, dim_mlp_layers=32):
+        super().__init__()
+        self.lr = learning_rate
+        self.feature_length = feature_length
+        self.dim_mlp_layers = dim_mlp_layers
+        self.d_model = 2 * feature_length
+        self.traverse_stack = nn.Sequential(
+            nn.Linear(2 * n_states + 2 * feature_length, dim_mlp_layers),
+            nn.ReLU(),
+            nn.Linear(dim_mlp_layers, feature_length),
+        )
+        self.classifier = nn.Linear(self.d_model, 1)
+        self.roc_metric = BinaryROC()
+        self.auroc_metric = AUROC(task="binary")
+        # Temporary storage for probabilities and targets
+        self.test_probs = []
+        self.test_targets = []
 
     def site_aggregate(self, tree):
         """
@@ -412,71 +639,12 @@ class TraverseAvgPooling(TraverseNN):
         col_sums = input_features.mean(dim=1, keepdim=True)
         return col_sums
 
-
-class TransformerEncoderTraversal(TraverseNN):
-    """
-    A pytorch module which takes a list of ete3.Trees as input and outputs 0's and 1's
-    to indicate whether each input tree is maximally parsimonious or not, respectively,
-    for the sequences assigned to the leaf nodes.
-
-    The forward function first encodes the mutation features using a transformer encoder
-    to summarize the edge mutations over all sites, and then applies two traversals to
-    the input tree, first root-ward and then leaf-ward.
-
-    Attributes:
-        encoder
-        classifier
-        traverse_stack
-    """
-
-    def __init__(self, learning_rate=0.01):
-        super().__init__(learning_rate=learning_rate)
-        self.encoder_layer = nn.TransformerEncoderLayer(
-            d_model=n_states,
-            nhead=nhead,
-            dim_feedforward=dim_feedforward,
-        )
-        self.encoder = nn.TransformerEncoder(self.encoder_layer, layer_count)
-        self.classifier = nn.Linear(d_model, 1)
-
-    def forward_on_tree(self, tree: Tree):
+    def forward_on_traversal(self, traversal, mutations):
         """
-        Takes an ete3.Tree as input and outputs a 0 or 1 to indicate whether the input
-        tree is maximally parsimonious or not, respectively, for the sequences assigned
-        to the leaf nodes.
-        Args:
-            tree (ete3 Tree): each node has a torch tensor attribute
-                to_parent["edge_mutation"] that encodes the mutation between the node and
-                its parent, e.g. A -> G is encoded by [-1, 1, 0, 0]
+        Compute features from traversal data structure, given one tree/traversal
+        and corresponding mutations (for all sites), then aggregate and classify.
         """
-        self.assign_mutation_vectors(tree)
-        self.site_aggregate(tree)
-        self.compute_features_via_traversal(
-            tree, seq_length=1, feature_name="all_sites_edge_mutation"
-        )
-        output = torch.stack(
-            [
-                torch.cat(
-                    (
-                        node.to_parent["clade_mutation_feature"],
-                        node.from_parent["clade_mutation_feature"],
-                    ),
-                    dim=1,
-                ).squeeze()
-                for node in tree.traverse(strategy="preorder")
-            ]
-        )
-        # output dim = (n_nodes, d_model=8)
-        logit = self.classifier(output)
+        learned_features = self.traversal_on_traversal(traversal, mutations)
+        output = learned_features.mean(dim=1, keepdim=True)
+        logit = self.classifier(output[:, 0])
         return logit
-
-    def site_aggregate(self, tree: Tree):
-        for node in tree.traverse(strategy="preorder"):
-            input = node.to_parent["edge_mutation"]
-            # input dim = (n_sites, n_states=4)
-            output = self.encoder(input)
-            # output dim = (n_sites, n_states=4)
-            # assign learned features to nodes
-            node.to_parent["all_sites_edge_mutation"] = output
-            node.from_parent["all_sites_edge_mutation"] = -output
-        return None
