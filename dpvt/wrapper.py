@@ -374,8 +374,8 @@ class HyperWrap:
         accum_grad_batches = trial.suggest_categorical(
             "accum_grad_batches", range(1, 2)
         )
-        # epochs = trial.suggest_categorical("epochs", range(1,300))
-        epochs = 200
+        epochs = trial.suggest_categorical("epochs", range(1,300))
+        # epochs = 200
         feature_length = trial.suggest_categorical(
             "feature_length", [2**x for x in range(2, 10)]
         )
