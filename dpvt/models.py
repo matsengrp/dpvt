@@ -121,7 +121,7 @@ class TraverseNN(L.LightningModule):
         self.log("pos_prediction_avg", torch.mean(pos_predictions), prog_bar=True)
         self.log("neg_prediction_avg", torch.mean(neg_predictions), prog_bar=True)
         loss = self.masked_bce_loss(pred, yb, mask)
-        self.log("train_loss", loss, on_epoch=True, batch_size = len(yb))
+        self.log("train_loss", loss, on_epoch=True, batch_size=len(yb))
         return loss
 
     def validation_step(self, val_batch, batch_idx):
@@ -144,7 +144,7 @@ class TraverseNN(L.LightningModule):
             ]
             pred = torch.stack(fw_output)
         loss = self.masked_bce_loss(pred, yb, mask)
-        self.log('val_loss', loss, on_epoch=True, prog_bar=True, batch_size = len(yb))
+        self.log("val_loss", loss, on_epoch=True, prog_bar=True, batch_size=len(yb))
         # Return the batch loss so it can be accumulated later
         return loss
 
@@ -183,23 +183,19 @@ class TraverseNN(L.LightningModule):
     def on_validation_epoch_end(self):
         # average validation loss over epoch and plot
         outputs = self.trainer.callback_metrics
-        avg_val_loss = outputs['val_loss']
+        avg_val_loss = outputs["val_loss"]
         # self.log('val_loss', avg_val_loss, on_epoch=True, batch_size = len(), prog_bar=True)
         self.logger.experiment.add_scalars(
-            "loss",
-            {"valid": avg_val_loss},
-            self.current_epoch
+            "loss", {"valid": avg_val_loss}, self.current_epoch
         )
 
     def on_train_epoch_end(self):
         # average training loss over epoch and plot
         outputs = self.trainer.callback_metrics
-        avg_train_loss = outputs['train_loss']
+        avg_train_loss = outputs["train_loss"]
         if avg_train_loss is not None:
             self.logger.experiment.add_scalars(
-                "loss",
-                {"train": avg_train_loss},
-                self.current_epoch
+                "loss", {"train": avg_train_loss}, self.current_epoch
             )
 
     def on_test_epoch_end(self):
@@ -313,9 +309,13 @@ class TraverseNN(L.LightningModule):
         """
         with torch.autograd.profiler.record_function("forward"):
             learned_features = self.traversal_on_traversal(traversal, mutations)
-            learned_features.transpose(0,1)
-            attention_masks = (learned_features == 0).any(dim=2).transpose(0,1).double()
-            encoder_output = self.encoder(learned_features, src_key_padding_mask=attention_masks)
+            learned_features.transpose(0, 1)
+            attention_masks = (
+                (learned_features == 0).any(dim=2).transpose(0, 1).double()
+            )
+            encoder_output = self.encoder(
+                learned_features, src_key_padding_mask=attention_masks
+            )
             summarized_features = encoder_output.mean(dim=1)
 
             logit = self.classifier(summarized_features)
@@ -473,9 +473,11 @@ class TraverseNN(L.LightningModule):
             ]
         )
         # learned_features dim = (n_nodes, n_sites, d_model=8)
-        learned_features.transpose(0,1)
-        attention_masks = (learned_features == 0).any(dim=2).transpose(0,1).double()
-        encoder_output = self.encoder(learned_features, src_key_padding_mask=attention_masks)
+        learned_features.transpose(0, 1)
+        attention_masks = (learned_features == 0).any(dim=2).transpose(0, 1).double()
+        encoder_output = self.encoder(
+            learned_features, src_key_padding_mask=attention_masks
+        )
         # out dim = (n_nodes, n_sites, d_model=8)
         return encoder_output
 
