@@ -228,6 +228,8 @@ class Wrap:
         hyperparameter_path="",
         profiling=False,
         accum_grad_batches=1,
+        timestamp=str(todays_date),
+        added_callbacks=[],
     ):
         self.log_path = log_path
         if device == "cpu-tree-dataset":
@@ -249,6 +251,7 @@ class Wrap:
             self.dim_mlp_layers = best_hyperparams["dim_mlp_layers"]
             self.accum_grad_batches = best_hyperparams["accum_grad_batches"]
             self.epochs = best_hyperparams["epochs"]
+            print(f"hyperparameters: {best_hyperparams}")
         else:
             print("Use default parameters for ", log_path)
             # Initialize model with specified parameters
@@ -259,7 +262,9 @@ class Wrap:
             self.epochs = epochs
         if isinstance(model, type):
             # `model` is a class
-            self.model = model(self.learning_rate, self.feature_length, self.dim_mlp_layers)
+            self.model = model(
+                self.learning_rate, self.feature_length, self.dim_mlp_layers
+            )
         else:
             # `model` is an instance of a class
             self.model = model
@@ -291,7 +296,7 @@ class Wrap:
         )
 
         logger = TensorBoardLogger(
-            "lightning_logs/" + self.device + "_" + str(todays_date), name=self.log_path
+            f"lightning_logs/{self.device}_{timestamp}", name=self.log_path
         )
         checkpoint_callback = ModelCheckpoint(
             dirpath=self.log_path,
@@ -316,7 +321,7 @@ class Wrap:
             log_every_n_steps=1,
             max_epochs=self.epochs,
             # limit_train_batches=1,
-            callbacks=[checkpoint_callback, early_stop_callback],
+            callbacks=[checkpoint_callback, early_stop_callback] + added_callbacks,
             profiler=profiler,
             accumulate_grad_batches=self.accum_grad_batches,
         )
@@ -348,6 +353,7 @@ class HyperWrap:
         n_trials=10,
         checkpoint_dir="hyper_checkpoints/",
         profiling=False,
+        added_callbacks=[],
     ):
         self.model = model
         self.train_data = train_data
@@ -360,6 +366,7 @@ class HyperWrap:
         self.n_trials = n_trials
         self.checkpoint_dir = checkpoint_dir
         self.profiling = profiling
+        self.added_callbacks = added_callbacks
 
     def objective(self, trial):
         """
@@ -374,7 +381,7 @@ class HyperWrap:
         accum_grad_batches = trial.suggest_categorical(
             "accum_grad_batches", range(1, 2)
         )
-        epochs = trial.suggest_categorical("epochs", range(1,300))
+        epochs = trial.suggest_categorical("epochs", range(1, 300))
         # epochs = 200
         feature_length = trial.suggest_categorical(
             "feature_length", [2**x for x in range(2, 10)]
@@ -414,7 +421,7 @@ class HyperWrap:
             logger=logger,
             max_epochs=epochs,
             # limit_train_batches=1,
-            callbacks=[checkpoint_callback, early_stop_callback],
+            callbacks=[checkpoint_callback, early_stop_callback] + self.added_callbacks,
             profiler=profiler,
             accumulate_grad_batches=accum_grad_batches,
         )
