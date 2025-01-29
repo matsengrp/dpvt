@@ -330,7 +330,7 @@ class TraverseNN(L.LightningModule):
         # for each node, we learn 2 features for each site (up and down)
         # Features have length self.feature_length
         learned_features = torch.zeros(
-            len(mutations), max_seq_length, 2, self.feature_length
+            len(mutations), 2, max_seq_length, self.feature_length
         ).to(traversal.device)
         i_dir = 0
         for direction in traversal:  # upward vs downward
@@ -344,40 +344,27 @@ class TraverseNN(L.LightningModule):
                     # stop if we are in padded part of traversal representation
                     break
                 if i_dir == 0:  # upward traversal
-                    for i in range(max_seq_length):
-                        if (
-                            mutations[adj_node1][i][0]
-                            == mutations[adj_node1][i][1]
-                            == -1
-                        ):
-                            # we are at a -1 row (padding)
-                            break
-                        self.traverse_node_aggregate(
-                            mutations[adj_node1][i],
-                            learned_features[adj_node1][i][i_dir],
-                            mutations[adj_node2][i],
-                            learned_features[adj_node2][i][i_dir],
-                            learned_features[current_node][i][i_dir],
-                        )
+                    combined_data = torch.cat(
+                        (
+                            mutations[adj_node1],
+                            learned_features[adj_node1][i_dir],
+                            mutations[adj_node2],
+                            learned_features[adj_node2][i_dir],
+                        ),
+                        dim=1,
+                    )
+                    learned_features[current_node][i_dir] = self.traverse_stack(combined_data)
                 else:
-                    for i in range(max_seq_length):
-                        if (
-                            mutations[adj_node1][i][0]
-                            == mutations[adj_node1][i][1]
-                            == -1
-                        ):
-                            # we are at a -1 row (padding)
-                            break
-                        self.traverse_node_aggregate(
-                            -mutations[adj_node1][i],
-                            learned_features[adj_node1][i][i_dir],
-                            mutations[adj_node2][i],
-                            learned_features[adj_node2][i][
-                                0
-                            ],  # feature for sibling taken from upwards traversal
-                            # -, bc from_parent mutations instead of to_parent
-                            learned_features[current_node][i][i_dir],
-                        )
+                    combined_data = torch.cat(
+                        (
+                            -mutations[adj_node1],
+                            learned_features[adj_node1][i_dir],
+                            mutations[adj_node2],
+                            learned_features[adj_node2][i_dir],
+                        ),
+                        dim=1,
+                    )
+                    learned_features[current_node][i_dir] = self.traverse_stack(combined_data)
             i_dir += 1
         # concatenate features to one dimension
         learned_features = learned_features.reshape(
