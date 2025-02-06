@@ -307,7 +307,6 @@ class TraverseNN(L.LightningModule):
         Compute features from traversal data structure, given one tree/traversal
         and corresponding mutations (for all sites), then aggregates and classifies.
         """
-        # with torch.autograd.profiler.record_function("forward"):
         learned_features = self.traversal_on_traversal(traversal, mutations)
         attention_masks = (
             (learned_features == 0).any(dim=2).to(torch.bool).transpose(0, 1)
