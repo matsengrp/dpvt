@@ -121,7 +121,7 @@ class TraverseNN(L.LightningModule):
         self.log("pos_prediction_avg", torch.mean(pos_predictions), prog_bar=True)
         self.log("neg_prediction_avg", torch.mean(neg_predictions), prog_bar=True)
         loss = self.masked_bce_loss(pred, yb, mask)
-        self.log("train_loss", loss, on_epoch=True, batch_size=len(yb))
+        self.log("train_loss", loss.item(), on_epoch=True, batch_size=len(yb))
         return loss
 
     def validation_step(self, val_batch, batch_idx):
@@ -144,7 +144,7 @@ class TraverseNN(L.LightningModule):
             ]
             pred = torch.stack(fw_output)
         loss = self.masked_bce_loss(pred, yb, mask)
-        self.log("val_loss", loss, on_epoch=True, prog_bar=True, batch_size=len(yb))
+        self.log("val_loss", loss.item(), on_epoch=True, prog_bar=True, batch_size=len(yb))
         # Return the batch loss so it can be accumulated later
         return loss
 
@@ -175,7 +175,7 @@ class TraverseNN(L.LightningModule):
         if torch.numel(masked_yb) > 0:  # Check if there are any unmasked elements
             self.auroc_metric(masked_pred, masked_yb)
             loss = self.masked_bce_loss(pred, yb, mask)
-            self.log("test_loss", loss, batch_size=len(yb))
+            self.log("test_loss", loss.item(), batch_size=len(yb))
         else:
             warnings.warn("Your test data is very small, or there is a bug")
         return {}
@@ -186,7 +186,7 @@ class TraverseNN(L.LightningModule):
         avg_val_loss = outputs["val_loss"]
         # self.log('val_loss', avg_val_loss, on_epoch=True, batch_size = len(), prog_bar=True)
         self.logger.experiment.add_scalars(
-            "loss", {"valid": avg_val_loss}, self.current_epoch
+            "loss", {"valid": avg_val_loss.item()}, self.current_epoch
         )
 
     def on_train_epoch_end(self):
@@ -195,7 +195,7 @@ class TraverseNN(L.LightningModule):
         avg_train_loss = outputs["train_loss"]
         if avg_train_loss is not None:
             self.logger.experiment.add_scalars(
-                "loss", {"train": avg_train_loss}, self.current_epoch
+                "loss", {"train": avg_train_loss.item()}, self.current_epoch
             )
 
     def on_test_epoch_end(self):
@@ -208,7 +208,7 @@ class TraverseNN(L.LightningModule):
         probs = torch.sigmoid(logits)
 
         auroc = self.auroc_metric.compute()
-        self.log("test_auroc", auroc, on_step=False, on_epoch=True)
+        self.log("test_auroc", auroc.item(), on_step=False, on_epoch=True)
 
         fpr, tpr, thresholds = self.roc_metric(probs, targets)
         fpr = fpr.cpu()
@@ -304,22 +304,20 @@ class TraverseNN(L.LightningModule):
 
     def forward_on_traversal(self, traversal, mutations):
         """summarized_features = encoder_output.mean(dim=0)
-        Compute features from traversal datastructure, given one tree/traversal
+        Compute features from traversal data structure, given one tree/traversal
         and corresponding mutations (for all sites), then aggregates and classifies.
         """
-        with torch.autograd.profiler.record_function("forward"):
-            learned_features = self.traversal_on_traversal(traversal, mutations)
-            learned_features.transpose(0, 1)
-            attention_masks = (
-                (learned_features == 0).any(dim=2).transpose(0, 1).double()
-            )
-            encoder_output = self.encoder(
-                learned_features, src_key_padding_mask=attention_masks
-            )
-            summarized_features = encoder_output.mean(dim=1)
-
-            logit = self.classifier(summarized_features)
+        learned_features = self.traversal_on_traversal(traversal, mutations)
+        attention_masks = (
+            (learned_features == 0).any(dim=2).to(torch.bool).transpose(0, 1)
+        )
+        encoder_output = self.encoder(
+            learned_features, src_key_padding_mask=attention_masks
+        )
+        summarized_features = encoder_output.mean(dim=1)
+        logit = self.classifier(summarized_features)
         return logit
+
 
     def traversal_on_traversal(self, traversal, mutations):
         """
@@ -327,13 +325,19 @@ class TraverseNN(L.LightningModule):
         and corresponding mutations (for all sites).
         """
         max_seq_length = mutations.size(1)
-        # for each node, we learn 2 features for each site (up and down)
-        # Features have length self.feature_length
-        learned_features = torch.zeros(
-            len(mutations), max_seq_length, 2, self.feature_length
-        ).to(traversal.device)
-        i_dir = 0
-        for direction in traversal:  # upward vs downward
+        device = traversal.device
+
+        # Initialize an empty list to store features for each node
+        node_features = []
+        max_node = len(mutations)
+
+        for node in range(max_node):
+            # For each node, create minimal initial features
+            # This could be empty or minimal depending on your needs
+            node_features.append(torch.zeros(2, max_seq_length, self.feature_length).to(device))
+
+        for i, direction in enumerate(traversal):
+            sign = -1 if i == 1 else 1
             for node_list in direction:
                 # first two nodes in list have feature already, we learn feature for third node in list
                 current_node = int(node_list[2])
@@ -343,47 +347,25 @@ class TraverseNN(L.LightningModule):
                 if current_node == adj_node1 == adj_node2:
                     # stop if we are in padded part of traversal representation
                     break
-                if i_dir == 0:  # upward traversal
-                    for i in range(max_seq_length):
-                        if (
-                            mutations[adj_node1][i][0]
-                            == mutations[adj_node1][i][1]
-                            == -1
-                        ):
-                            # we are at a -1 row (padding)
-                            break
-                        self.traverse_node_aggregate(
-                            mutations[adj_node1][i],
-                            learned_features[adj_node1][i][i_dir],
-                            mutations[adj_node2][i],
-                            learned_features[adj_node2][i][i_dir],
-                            learned_features[current_node][i][i_dir],
-                        )
-                else:
-                    for i in range(max_seq_length):
-                        if (
-                            mutations[adj_node1][i][0]
-                            == mutations[adj_node1][i][1]
-                            == -1
-                        ):
-                            # we are at a -1 row (padding)
-                            break
-                        self.traverse_node_aggregate(
-                            -mutations[adj_node1][i],
-                            learned_features[adj_node1][i][i_dir],
-                            mutations[adj_node2][i],
-                            learned_features[adj_node2][i][
-                                0
-                            ],  # feature for sibling taken from upwards traversal
-                            # -, bc from_parent mutations instead of to_parent
-                            learned_features[current_node][i][i_dir],
-                        )
-            i_dir += 1
-        # concatenate features to one dimension
+                combined_data = torch.cat(
+                    (
+                        sign * mutations[adj_node1],
+                        node_features[adj_node1][i],
+                        mutations[adj_node2],
+                        node_features[adj_node2][i],
+                    ),
+                    dim=1,
+                )
+
+                # Update just the features we need
+                node_features[current_node][i] = self.traverse_stack(combined_data)
+        # Combine all features
+        learned_features = torch.stack(node_features)
         learned_features = learned_features.reshape(
             len(mutations), max_seq_length, 2 * self.feature_length
         )
         return learned_features
+
 
     def compute_features_via_traversal(
         self,
