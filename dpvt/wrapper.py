@@ -1,6 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
+from torch.nn.utils.rnn import pad_sequence
 import lightning as L
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.profilers import AdvancedProfiler
@@ -112,11 +113,9 @@ class TraversalDataset(Dataset):
         max_n_sites = max([len(tree.sequence) for tree in trees])
         max_n_nodes = max([len(list(tree.traverse())) for tree in trees])
         max_n_int_nodes = max([len(tree) - 2 for tree in trees])
-        mutations = torch.empty(len(trees), max_n_nodes, max_n_sites, 4)
-        mutations.fill_(-1)  # pad with -1 so we can distinguish padding
+        mutations = torch.full((len(trees), max_n_nodes, max_n_sites, 4), -1, dtype=torch.float32)
         # from actual 0 entries representing no mutation
-        traversal = torch.empty(len(trees), 2, max_n_int_nodes, 3)
-        traversal.fill_(-1)
+        traversal = torch.full((len(trees), 2, max_n_int_nodes, 3), -1, dtype=torch.float32)
         tree_index = 0
         # child and parent index in traversal
         for tree in trees:
@@ -178,33 +177,23 @@ class TraversalDataset(Dataset):
             tree_index += 1
         return traversal, mutations
 
+
     def mask_pendant_edges(self, trees):
-        max_n_nodes = max([len(list(tree.traverse())) for tree in trees])
-        masks = torch.full((len(trees), max_n_nodes), False, dtype=torch.bool)
-        i = 0
-        for tree in trees:
-            # mask leaves, root (which is leaf) and root (which contains data for edge
-            # leading to root leaf)
-            mask_list = [
+        # Create list of tensors, each containing the mask for one tree
+        masks = [
+            torch.tensor([
                 not (node.is_leaf() or node.is_root() or node.up.is_root())
                 for node in tree.traverse("preorder")
-            ]
-            remaining_spots = max_n_nodes - len(mask_list)
-            mask_list += [False for i in range(remaining_spots)]
-            masks[i] = torch.tensor(mask_list)
-            i += 1
-        return masks
+            ], dtype=torch.bool)
+            for tree in trees
+        ]
+        # Pad and stack all masks into a single tensor
+        return pad_sequence(masks, batch_first=True, padding_value=False)
+
 
     def pad_labels(self, labels):
-        max_length = max([len(label) for label in labels])
-        padded_labels = torch.zeros(len(labels), max_length)
-        i = 0
-        for label in labels:
-            to_fill = max_length - len(label)
-            label += [0 for i in range(to_fill)]
-            padded_labels[i] = torch.tensor(label)
-            i += 1
-        return padded_labels
+        label_tensors = [torch.tensor(label, dtype=torch.float32) for label in labels]
+        return pad_sequence(label_tensors, batch_first=True, padding_value=0)
 
 
 class Wrap:
@@ -442,7 +431,7 @@ class HyperWrap:
             hyperparams_filename: json file in which to store best hyperparameters
         """
         study = optuna.create_study(direction="minimize")
-        study.optimize(self.objective, self.n_trials)
+        study.optimize(self.objective, self.n_trials, gc_after_trial=True)
 
         best_hyperparameters = study.best_trial.params
         with open(hyperparams_filename, "w") as f:
