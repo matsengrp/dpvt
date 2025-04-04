@@ -649,6 +649,12 @@ class TraverseAvgPooling(TraverseNN):
 
 
 class BaselineReversion(L.LightningModule):
+    """
+    Baseline model we compare our deep learning models to. This model detects
+    whether there is a reversion at any site on an edge and if so, labels it as
+    non-MP (computed in get_reversion_labels_from_tree). This model requires the
+    input to be in the format of a TreeDataset.
+    """
     def __init__(self):
         super().__init__()
         # No learnable parameters needed
@@ -658,81 +664,72 @@ class BaselineReversion(L.LightningModule):
         self.test_probs = []
         self.test_targets = []
     
-    def get_reversion_labels(self, traversal, mutations):
+    def get_reversion_labels_from_tree(self, tree):
         """
-        Take in a traversal and mutations representing one tree and create a
-        list with labels 0/1 containing for each node (sorted according to node
-        id) whether there is a reversion on the edge above the node or not
+        Take in a tree object and create a list with labels 0/1 containing for
+        each node whether there is a reversion on the edge above the node
         """
-        max_n_nodes = mutations.size(0)
-        max_n_sites = mutations.size(1)
-
-        # node_dict contains for each node all mutations at each site between
-        # root and this node
-        node_dict = [{j: [] for j in range(max_n_sites)} for i in range(max_n_nodes)]
-        reversion_labels = torch.zeros(max_n_nodes, dtype=torch.float32, device=traversal.device)
+        max_n_sites = len(tree.sequence)
+        # Dictionary to keep track of all mutations between root and each node
+        node_mutation_history = {node: {site: [] for site in range(max_n_sites)} 
+                                 for node in tree.traverse()}
         
-        # Process nodes from root to leaves
-        # TODO We need to make sure we look at all internal edges and label all leaves as 0!
-        for current_node_idx in range(max_n_nodes):
-            # Find where this node appears as parent in traversal
-            # TODO Problem with using traversal: It doesn't take trivial splits into account, which includes mutations on the root edge
-            matching_rows = torch.where(traversal[0, :, 2] == current_node_idx)[0]
-            if len(matching_rows) > 0:
-                row_idx = matching_rows[0].item()
-                child1_idx = int(traversal[0, row_idx, 0].item())
-                child2_idx = int(traversal[0, row_idx, 1].item())
-                for site_idx in range(max_n_sites):
-                    print("site index:", site_idx)
-                    print("node index:", current_node_idx)
-                    print("mutations:", mutations[current_node_idx][site_idx])
-                    node_dict[child1_idx][site_idx] += [node_dict[current_node_idx][site_idx]]
-                    node_dict[child1_idx][site_idx] += [mutations[child1_idx][site_idx]]
-                    node_dict[child2_idx][site_idx] += [node_dict[current_node_idx][site_idx]]
-                    node_dict[child2_idx][site_idx] += [mutations[child2_idx][site_idx]]
-                    for child_idx in [child1_idx, child2_idx]:
-                        if -1 * mutations[child_idx] in node_dict[current_node_idx][site_idx]:
-                            print("Found reversion!")
-                            reversion_labels[child_idx] = 1
+        # Result tensor storing reversion status for each node
+        reversion_labels = torch.zeros(len(list(tree.traverse())), dtype=torch.float32)
+        
+        # Map nodes to indices to keep consistent indexing
+        node_to_idx = {node: i for i, node in enumerate(tree.traverse("preorder"))}
+        
+        # Process from root to leaves (preorder traversal)
+        for node in tree.traverse("preorder"):
+            if node.is_root() or node.is_leaf():
+                # root and leaf nodes will be labelled as MP edges
+                continue
+                
+            parent = node.up
+            # For each site, track mutations
+            for site in range(max_n_sites):
+                # Copy parent's mutation history
+                node_mutation_history[node][site] = node_mutation_history[parent][site].copy()
+                
+                # Add current mutation if it exists
+                n_seq = node.sequence[site]
+                p_seq = parent.sequence[site]
+                
+                if n_seq != p_seq:
+                    # Create mutation vector
+                    mut_vec = [0, 0, 0, 0]
+                    mut_vec[STATE_TO_IDX[n_seq]] += 1
+                    mut_vec[STATE_TO_IDX[p_seq]] -= 1
+                    
+                    # Check if this is a reversion of any previous mutation
+                    for prev_mutation in node_mutation_history[node][site]:
+                        if prev_mutation[STATE_TO_IDX[p_seq]] == 1 and prev_mutation[STATE_TO_IDX[n_seq]] == -1:
+                            # Found a reversion!
+                            reversion_labels[node_to_idx[node]] = 1
+                            print(f"Found reversion at node {node_to_idx[node]}, site {site}: {p_seq} -> {n_seq}")
                             break
-        return reversion_labels
+                    
+                    # Add this mutation to history
+                    node_mutation_history[node][site].append(mut_vec)
         
+        return reversion_labels
+    
     def forward(self, batch):
         """Apply the reversion detection to the input batch"""
-        traversal, mutations = batch
-        # Process each tree in the batch
-        results = []
-        for tree_idx in range(traversal.shape[0]):
-            tree_traversal = traversal[tree_idx]
-            tree_mutations = mutations[tree_idx]
-            result = self.get_reversion_labels(tree_traversal, tree_mutations)
-            results.append(result)
-        
-        return torch.stack(results)
+        # Input is a list of trees
+        return torch.stack([self.get_reversion_labels_from_tree(tree) for tree in batch])
     
-    def predict_step(self, batch, batch_idx):
-        traversal, mutations, _, _ = batch
-        return self.forward((traversal, mutations))
-    
-    # Required by PyTorch Lightning but won't be used
-    def configure_optimizers(self):
-        return None
-    
-    # Override training_step to comply with Lightning's requirements
-    def training_step(self, batch, batch_idx):
-        # This will never actually be called
-        return None
-        
-    def test_step(self, batch, batch_idx):
-        """Test step that computes metrics similar to other models"""
-        traversal, mutations, labels, mask = batch
-        
-        # Get predictions (0/1 for each edge)
-        predictions = self.forward((traversal, mutations))
+    def test_step(self, test_batch, batch_idx):
+        """Test step that handles both tree datasets and tensor datasets"""
+        if type(test_batch[0][0]) == Tree:
+            # Input is tree dataset
+            xb, yb, mask = test_batch
+            predictions = self.forward(xb)
         
         # Apply mask to focus on the edges we care about
         masked_pred = predictions[mask]
-        masked_labels = labels[mask].int()
+        masked_labels = yb[mask].int()
         
         # Print the actual predictions and labels
         print(f"Batch {batch_idx} - Predictions vs Labels:")
@@ -747,7 +744,16 @@ class BaselineReversion(L.LightningModule):
         if torch.numel(masked_labels) > 0:
             self.auroc_metric(masked_pred, masked_labels)
             
-        return {"predictions": predictions, "labels": labels, "mask": mask}
+        return {"predictions": predictions, "labels": yb, "mask": mask}
+    
+    # Required by PyTorch Lightning but won't be used
+    def configure_optimizers(self):
+        return None
+    
+    # Override training_step to comply with Lightning's requirements
+    def training_step(self, batch, batch_idx):
+        # This will never actually be called
+        return None
     
     def on_test_epoch_end(self):
         """Compute final metrics at end of testing"""
