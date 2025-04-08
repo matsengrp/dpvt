@@ -4,6 +4,7 @@ from torch import nn
 import torch.nn.functional as F
 from torchmetrics import AUROC
 from torchmetrics.classification import BinaryROC
+from torch.nn.utils.rnn import pad_sequence
 
 import matplotlib
 
@@ -707,7 +708,7 @@ class BaselineReversion(L.LightningModule):
                         if prev_mutation[STATE_TO_IDX[p_seq]] == 1 and prev_mutation[STATE_TO_IDX[n_seq]] == -1:
                             # Found a reversion!
                             reversion_labels[node_to_idx[node]] = 1
-                            print(f"Found reversion at node {node_to_idx[node]}, site {site}: {p_seq} -> {n_seq}")
+                            # print(f"Found reversion at node {node_to_idx[node]}, site {site}: {p_seq} -> {n_seq}")
                             break
                     
                     # Add this mutation to history
@@ -718,23 +719,29 @@ class BaselineReversion(L.LightningModule):
     def forward(self, batch):
         """Apply the reversion detection to the input batch"""
         # Input is a list of trees
-        return torch.stack([self.get_reversion_labels_from_tree(tree) for tree in batch])
+        reversion_labels = [self.get_reversion_labels_from_tree(tree) for tree in batch]
+        return reversion_labels
+
     
     def test_step(self, test_batch, batch_idx):
         """Test step that handles both tree datasets and tensor datasets"""
         if type(test_batch[0][0]) == Tree:
             # Input is tree dataset
             xb, yb, mask = test_batch
+            max_seq_length = max([len(tree.sequence) for tree in xb])
             predictions = self.forward(xb)
+            max_num_leaves = yb.size(1) # labels are already padded
+            predictions = pad_sequence(predictions, batch_first=True, padding_value=0)
+            print(predictions.shape, yb.shape)
         
         # Apply mask to focus on the edges we care about
         masked_pred = predictions[mask]
         masked_labels = yb[mask].int()
         
-        # Print the actual predictions and labels
-        print(f"Batch {batch_idx} - Predictions vs Labels:")
-        for i, (pred, label) in enumerate(zip(masked_pred, masked_labels)):
-            print(f"  Edge {i}: Prediction={pred.item():.4f}, Label={label.item()}")
+        # # Print the actual predictions and labels
+        # print(f"Batch {batch_idx} - Predictions vs Labels:")
+        # for i, (pred, label) in enumerate(zip(masked_pred, masked_labels)):
+        #     print(f"Edge {i}: Prediction={pred.item():.4f}, Label={label.item()}")
         
         # Store predictions for ROC computation
         self.test_probs.append(masked_pred)
