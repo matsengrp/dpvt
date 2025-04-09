@@ -457,7 +457,7 @@ class HyperWrap:
             hyperparameters
         """
         study = optuna.create_study(direction="minimize")
-        study.optimize(self.objective, self.n_trials, gc_after_trial=True)
+        study.optimize(self.objective, self.n_trials, gc_after_trial=True, n_jobs=4)
 
         best_hyperparameters = study.best_trial.params
         with open(hyperparams_filename, "w") as f:
