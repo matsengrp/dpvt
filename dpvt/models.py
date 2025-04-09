@@ -358,11 +358,20 @@ class TraverseNN(L.LightningModule):
                 if current_node == adj_node1 == adj_node2:
                     # stop if we are in padded part of traversal representation
                     break
+                if i == 0:
+                    # in upward traversal, multiply both mutation encoding by -1
+                    mutation1 = -1 * mutations[adj_node1]
+                    mutation2 = -1 * mutations[adj_node2]
+                else:
+                    # in downward traversal, only multiply mutation encoding of sibling by -1
+                    mutation1 = -1 * mutations[adj_node1]
+                    mutation2 = mutations[adj_node2]
+                # Compute features for the current node
                 combined_data = torch.cat(
                     (
-                        sign * mutations[adj_node1],
+                        mutation1,
                         node_features[adj_node1][i],
-                        mutations[adj_node2],
+                        mutation2,
                         node_features[adj_node2][i],
                     ),
                     dim=1,
