@@ -391,10 +391,10 @@ class HyperWrap:
         # Define hyperparameter search space
         learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True)
         batch_size = trial.suggest_categorical(
-            "batch_size", [2**x for x in range(4, 10)]
+            "batch_size", [2**x for x in range(1, 6)]
         )
         accum_grad_batches = trial.suggest_categorical(
-            "accum_grad_batches", range(1, 2)
+            "accum_grad_batches", range(1, 10)
         )
         epochs = trial.suggest_categorical("epochs", range(1, 300))
         # epochs = 200
