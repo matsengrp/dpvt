@@ -749,8 +749,7 @@ class BaselineReversion(L.LightningModule):
             predictions = self.forward(xb)
             max_num_leaves = yb.size(1) # labels are already padded
             predictions = pad_sequence(predictions, batch_first=True, padding_value=0)
-            print(predictions.shape, yb.shape)
-        
+
         # Apply mask to focus on the edges we care about
         masked_pred = predictions[mask]
         masked_labels = yb[mask].int()
