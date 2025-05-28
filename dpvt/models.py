@@ -3,7 +3,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torchmetrics import AUROC
-from torchmetrics.classification import BinaryROC
+from torchmetrics.classification import BinaryROC, BinaryAccuracy
 from torch.nn.utils.rnn import pad_sequence
 
 import matplotlib
@@ -83,6 +83,7 @@ class TraverseNN(L.LightningModule):
         self.classifier = nn.Linear(self.d_model, 1)
         self.roc_metric = BinaryROC()
         self.auroc_metric = AUROC(task="binary")
+        self.accuracy_metric = BinaryAccuracy()
         # Temporary storage for probabilities and targets
         self.test_probs = []
         self.test_targets = []
@@ -180,6 +181,8 @@ class TraverseNN(L.LightningModule):
         self.test_targets.append(masked_yb)
         if torch.numel(masked_yb) > 0:  # Check if there are any unmasked elements
             self.auroc_metric(masked_pred, masked_yb)
+            probs = torch.sigmoid(masked_pred)
+            self.accuracy_metric(probs, masked_yb)
             loss = self.masked_bce_loss(pred, yb, mask)
             self.log("test_loss", loss.item(), batch_size=len(yb))
         else:
@@ -216,6 +219,8 @@ class TraverseNN(L.LightningModule):
 
         auroc = self.auroc_metric.compute()
         self.log("test_auroc", auroc.item(), on_step=False, on_epoch=True)
+        accuracy = self.accuracy_metric.compute()
+        self.log("test_accuracy", accuracy.item(), on_step=False, on_epoch=True)
 
         fpr, tpr, thresholds = self.roc_metric(probs, targets)
         fpr = fpr.cpu()
@@ -237,6 +242,7 @@ class TraverseNN(L.LightningModule):
         self.test_probs.clear()
         self.test_targets.clear()
         self.roc_metric.reset()
+        self.accuracy_metric.reset()
 
     def forward(self, input, optimized=False):
         """
@@ -621,6 +627,7 @@ class TraverseAvgPooling(TraverseNN):
         self.classifier = nn.Linear(self.d_model, 1)
         self.roc_metric = BinaryROC()
         self.auroc_metric = AUROC(task="binary")
+        self.accuracy_metric = BinaryAccuracy()
         # Temporary storage for probabilities and targets
         self.test_probs = []
         self.test_targets = []
@@ -670,6 +677,7 @@ class BaselineReversion(L.LightningModule):
         # No learnable parameters needed
         self.roc_metric = BinaryROC()
         self.auroc_metric = AUROC(task="binary")
+        self.accuracy_metric = BinaryAccuracy()
         # Temporary storage for probabilities and targets
         self.test_probs = []
         self.test_targets = []
@@ -781,6 +789,8 @@ class BaselineReversion(L.LightningModule):
         
         auroc = self.auroc_metric.compute()
         self.log("test_auroc", auroc.item(), on_step=False, on_epoch=True)
+        accuracy = self.accuracy_metric.compute()
+        self.log("test_accuracy", accuracy.item(), on_step=False, on_epoch=True)
         
         fpr, tpr, thresholds = self.roc_metric(preds, targets)
         
@@ -801,3 +811,4 @@ class BaselineReversion(L.LightningModule):
         self.test_probs.clear()
         self.test_targets.clear()
         self.roc_metric.reset()
+        self.accuracy_metric.reset()
