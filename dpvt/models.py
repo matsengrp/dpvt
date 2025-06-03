@@ -151,7 +151,9 @@ class TraverseNN(L.LightningModule):
             ]
             pred = torch.stack(fw_output)
         loss = self.masked_bce_loss(pred, yb, mask)
-        self.log("val_loss", loss.item(), on_epoch=True, prog_bar=True, batch_size=len(yb))
+        self.log(
+            "val_loss", loss.item(), on_epoch=True, prog_bar=True, batch_size=len(yb)
+        )
         # Return the batch loss so it can be accumulated later
         return loss
 
@@ -334,7 +336,6 @@ class TraverseNN(L.LightningModule):
         logit = self.classifier(summarized_features)
         return logit
 
-
     def traversal_on_traversal(self, traversal, mutations):
         """
         Compute features from traversal datastructure, given one tree/traversal
@@ -350,7 +351,9 @@ class TraverseNN(L.LightningModule):
         for node in range(max_node):
             # For each node, create minimal initial features This could be empty
             # or minimal depending on your needs
-            node_features.append(torch.zeros(2, max_seq_length, self.feature_length).to(device))
+            node_features.append(
+                torch.zeros(2, max_seq_length, self.feature_length).to(device)
+            )
 
         for i, direction in enumerate(traversal):
             sign = -1 if i == 1 else 1
@@ -365,7 +368,7 @@ class TraverseNN(L.LightningModule):
                     # stop if we are in padded part of traversal representation
                     break
                 if i == 0:
-                    # in upward traversal, multiply both mutation encoding by -1
+                    # in upward traversal, multiply mutation encodings of both children by -1
                     mutation1 = -1 * mutations[adj_node1]
                     mutation2 = -1 * mutations[adj_node2]
                 else:
@@ -391,7 +394,6 @@ class TraverseNN(L.LightningModule):
             len(mutations), max_seq_length, 2 * self.feature_length
         )
         return learned_features
-
 
     def compute_features_via_traversal(
         self,
@@ -672,6 +674,7 @@ class BaselineReversion(L.LightningModule):
     non-MP (computed in get_reversion_labels_from_tree). This model requires the
     input to be in the format of a TreeDataset.
     """
+
     def __init__(self):
         super().__init__()
         # No learnable parameters needed
@@ -681,7 +684,7 @@ class BaselineReversion(L.LightningModule):
         # Temporary storage for probabilities and targets
         self.test_probs = []
         self.test_targets = []
-    
+
     def get_reversion_labels_from_tree(self, tree):
         """
         Take in a tree object and create a list with labels 0/1 containing for
@@ -689,57 +692,62 @@ class BaselineReversion(L.LightningModule):
         """
         max_n_sites = len(tree.sequence)
         # Dictionary to keep track of all mutations between root and each node
-        node_mutation_history = {node: {site: [] for site in range(max_n_sites)} 
-                                 for node in tree.traverse()}
-        
+        node_mutation_history = {
+            node: {site: [] for site in range(max_n_sites)} for node in tree.traverse()
+        }
+
         # Result tensor storing reversion status for each node
         reversion_labels = torch.zeros(len(list(tree.traverse())), dtype=torch.float32)
-        
+
         # Map nodes to indices to keep consistent indexing
         node_to_idx = {node: i for i, node in enumerate(tree.traverse("preorder"))}
-        
+
         # Process from root to leaves (preorder traversal)
         for node in tree.traverse("preorder"):
             if node.is_root() or node.is_leaf():
                 # root and leaf nodes will be labelled as MP edges
                 continue
-                
+
             parent = node.up
             # For each site, track mutations
             for site in range(max_n_sites):
                 # Copy parent's mutation history
-                node_mutation_history[node][site] = node_mutation_history[parent][site].copy()
-                
+                node_mutation_history[node][site] = node_mutation_history[parent][
+                    site
+                ].copy()
+
                 # Add current mutation if it exists
                 n_seq = node.sequence[site]
                 p_seq = parent.sequence[site]
-                
+
                 if n_seq != p_seq:
                     # Create mutation vector
                     mut_vec = [0, 0, 0, 0]
                     mut_vec[STATE_TO_IDX[n_seq]] += 1
                     mut_vec[STATE_TO_IDX[p_seq]] -= 1
-                    
+
                     # Check if this is a reversion of any previous mutation
                     for prev_mutation in node_mutation_history[node][site]:
-                        if prev_mutation[STATE_TO_IDX[p_seq]] == 1 and prev_mutation[STATE_TO_IDX[n_seq]] == -1:
+                        if (
+                            prev_mutation[STATE_TO_IDX[p_seq]] == 1
+                            and prev_mutation[STATE_TO_IDX[n_seq]] == -1
+                        ):
                             # Found a reversion!
                             reversion_labels[node_to_idx[node]] = 1
                             # print(f"Found reversion at node {node_to_idx[node]}, site {site}: {p_seq} -> {n_seq}")
                             break
-                    
+
                     # Add this mutation to history
                     node_mutation_history[node][site].append(mut_vec)
-        
+
         return reversion_labels
-    
+
     def forward(self, batch):
         """Apply the reversion detection to the input batch"""
         # Input is a list of trees
         reversion_labels = [self.get_reversion_labels_from_tree(tree) for tree in batch]
         return reversion_labels
 
-    
     def test_step(self, test_batch, batch_idx):
         """Test step that handles both tree datasets and tensor datasets"""
         if type(test_batch[0][0]) == Tree:
@@ -747,22 +755,22 @@ class BaselineReversion(L.LightningModule):
             xb, yb, mask = test_batch
             max_seq_length = max([len(tree.sequence) for tree in xb])
             predictions = self.forward(xb)
-            max_num_leaves = yb.size(1) # labels are already padded
+            max_num_leaves = yb.size(1)  # labels are already padded
             predictions = pad_sequence(predictions, batch_first=True, padding_value=0)
 
         # Apply mask to focus on the edges we care about
         masked_pred = predictions[mask]
         masked_labels = yb[mask].int()
-        
+
         # # Print the actual predictions and labels
         # print(f"Batch {batch_idx} - Predictions vs Labels:")
         # for i, (pred, label) in enumerate(zip(masked_pred, masked_labels)):
         #     print(f"Edge {i}: Prediction={pred.item():.4f}, Label={label.item()}")
-        
+
         # Store predictions for ROC computation
         self.test_probs.append(masked_pred)
         self.test_targets.append(masked_labels)
-        
+
         # Compute AUROC
         if torch.numel(masked_labels) > 0:
             self.auroc_metric(masked_pred, masked_labels)
@@ -771,29 +779,29 @@ class BaselineReversion(L.LightningModule):
             self.accuracy_metric(binary_probs, masked_labels)
 
         return {"predictions": predictions, "labels": yb, "mask": mask}
-    
+
     # Required by PyTorch Lightning but won't be used
     def configure_optimizers(self):
         return None
-    
+
     # Override training_step to comply with Lightning's requirements
     def training_step(self, batch, batch_idx):
         # This will never actually be called
         return None
-    
+
     def on_test_epoch_end(self):
         """Compute final metrics at end of testing"""
         if not self.test_probs:
             return
-            
+
         preds = torch.cat(self.test_probs, dim=0)
         targets = torch.cat(self.test_targets, dim=0)
-        
+
         auroc = self.auroc_metric.compute()
         self.log("test_auroc", auroc.item(), on_step=False, on_epoch=True)
         accuracy = self.accuracy_metric.compute()
         self.log("test_accuracy", accuracy.item(), on_step=False, on_epoch=True)
-        
+
         # Ensure preds are in proper probability format for ROC calculation
         if preds.unique().numel() <= 2 and preds.max() <= 1.0:
             # If binary predictions (0/1), use as is
@@ -803,7 +811,7 @@ class BaselineReversion(L.LightningModule):
             roc_preds = (preds - preds.min()) / (preds.max() - preds.min())
 
         fpr, tpr, thresholds = self.roc_metric(roc_preds, targets)
-        
+
         # Create ROC curve
         fig, ax = plt.subplots()
         ax.plot(fpr.cpu(), tpr.cpu(), label=f"AUROC: {auroc:.2f}")
@@ -811,12 +819,12 @@ class BaselineReversion(L.LightningModule):
         ax.set_ylabel("True Positive Rate")
         ax.set_title("ROC Curve - Baseline Reversion")
         ax.legend(loc="lower right")
-        
+
         if self.logger:
             self.logger.experiment.add_figure("ROC Curve", fig, 0)
-            
+
         plt.close(fig)
-        
+
         # Clear stored data
         self.test_probs.clear()
         self.test_targets.clear()

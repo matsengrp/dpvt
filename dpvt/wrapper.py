@@ -111,9 +111,13 @@ class TraversalDataset(Dataset):
         max_n_sites = max([len(tree.sequence) for tree in trees])
         max_n_nodes = max([len(list(tree.traverse())) for tree in trees])
         max_n_int_nodes = max([len(tree) - 2 for tree in trees])
-        mutations = torch.full((len(trees), max_n_nodes, max_n_sites, 4), -1, dtype=torch.float32)
+        mutations = torch.full(
+            (len(trees), max_n_nodes, max_n_sites, 4), -1, dtype=torch.float32
+        )
         # from actual 0 entries representing no mutation
-        traversal = torch.full((len(trees), 2, max_n_int_nodes, 3), -1, dtype=torch.float32)
+        traversal = torch.full(
+            (len(trees), 2, max_n_int_nodes, 3), -1, dtype=torch.float32
+        )
         tree_index = 0
         # child and parent index in traversal
         for tree in trees:
@@ -175,19 +179,20 @@ class TraversalDataset(Dataset):
             tree_index += 1
         return traversal, mutations
 
-
     def mask_pendant_edges(self, trees):
         # Create list of tensors, each containing the mask for one tree
         masks = [
-            torch.tensor([
-                not (node.is_leaf() or node.is_root() or node.up.is_root())
-                for node in tree.traverse("preorder")
-            ], dtype=torch.bool)
+            torch.tensor(
+                [
+                    not (node.is_leaf() or node.is_root() or node.up.is_root())
+                    for node in tree.traverse("preorder")
+                ],
+                dtype=torch.bool,
+            )
             for tree in trees
         ]
         # Pad and stack all masks into a single tensor
         return pad_sequence(masks, batch_first=True, padding_value=False)
-
 
     def pad_labels(self, labels):
         label_tensors = [torch.tensor(label, dtype=torch.float32) for label in labels]
@@ -205,10 +210,10 @@ class Wrap:
         log_path: Path to save logs and checkpoints
         device: Device to use for training (e.g., "cpu", "cuda")
         batch_size: Batch size for training
-        learning_rate: Learning rate for the optimizer  
-        feature_length: Length of the feature vector  
-        dim_mlp_layers: Dimension of MLP layers  
-        epochs: Number of epochs for training  
+        learning_rate: Learning rate for the optimizer
+        feature_length: Length of the feature vector
+        dim_mlp_layers: Dimension of MLP layers
+        epochs: Number of epochs for training
         hyperparameter_path: Path to a JSON file with hyperparameters, which
             replace the default parameters in the input here
         profiling: Boolean indicating whether to use profiling
@@ -475,15 +480,10 @@ class Wraplet:
         model: Model class or instance
     """
 
-    def __init__(
-        self,
-        test_data,
-        model,
-        device="cpu"
-    ):
+    def __init__(self, test_data, model, device="cpu"):
         self.device = device
         self.batch_size = len(test_data)
-        
+
         # Initialize the model
         if isinstance(model, type):
             # `model` is a class
@@ -491,22 +491,22 @@ class Wraplet:
         else:
             # `model` is an instance of a class
             self.model = model
-            
+
         # Create test loader
         self.test_loader = DataLoader(
             test_data,
             batch_size=self.batch_size,
             collate_fn=custom_collate,
             num_workers=10,
-            drop_last=False  # We typically want all data for evaluation
+            drop_last=False,  # We typically want all data for evaluation
         )
-        
+
         # Set up a simple trainer for testing only
         self.trainer = L.Trainer(
             accelerator=self.device,
             devices=1,
             enable_checkpointing=False,  # No need to save checkpoints for baseline model
-            logger=False  # No need for logging during testing
+            logger=False,  # No need for logging during testing
         )
 
     def test(self):
