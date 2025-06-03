@@ -4,12 +4,16 @@ Deep (neural networks for) Phylogenetics Via Traversals
 
 ## Installation
 
+This package can easily be installed with mamba (or conda). First, create the
+`dpvt` conda environment:
+
 ```bash
 mamba env create -f environment.yml
 ```
 
-To install this package locally, clone the repo and in the root folder (with the
-`setup.py` file) run:
+To install the package locally run in the root folder (with the `pyproject.toml`
+file):
+
 ```bash
 pip install -e .
 ```
@@ -40,20 +44,18 @@ this is set in the `dpvt-experiments-1` repo.
 	the RNN predicting the feature of node3. For upward traversal this means that
 	node1 and node2 are children of node3. Nodes are indexed by preorder
 	traversal.
-    - dimension: `(num_trees, 2, num_int_edges, 3)` (2 for upward and
-	downward traversal)
+    - dimension: `(num_trees, 2, num_int_edges, 3)` (2 for upward and downward
+	traversal)
 - `mutations`: Contains for each tree, node, and site a tensor
 	$(m_A,m_G,m_C,m_T)$, where $m_i=1$ and $m_j=-1$ if there is a mutation from
 	base j to base i at this node, all other entries are $0$.
-    - dimension:
-	`(num_trees, num_nodes, num_sites, 4)`
+    - dimension: `(num_trees, num_nodes, num_sites, 4)`
 - `labels`: For each tree and each node, indicates whether the edge above this
 	node is in a MP tree (`0`) or not (`1`)
     - dimension: `(num_trees, num_nodes)`
 - `masks`: For each tree and each node, indicates whether the edge above this
 	node is an internal edge (`True`) or not (`False`)
-    - dimension: `(num_trees,
-	num_nodes)`
+    - dimension: `(num_trees, num_nodes)`
 
 Note that if input trees have different number of taxa and/or the sequences on
 leaves have different lengths in different trees, `traversal`, `mutations`, and
@@ -77,7 +79,7 @@ mutations tensor, none of the `-1` are being used for calculating the loss.
   - dimension: `(num_trees, num_nodes)`
 
 
-## Neural network model
+## Neural Network Models
 
 
 ### TraverseNN
@@ -105,11 +107,10 @@ thing. The advantage of the `TraversalDataset` is, however, that it uses
   triple we iterate over all sites of the alignments, to the feature for `node3`
   is learned separately for each site of the sequences.
 
-2. Site-aggregation step: 
-  We apply a transformer to combine the `learned_features` over all sites. The
-  `learned_features` are the input and the output is a tensor of the same size.
-  We then average the output over all sites to be our final feature for each
-  node.
+2. Site-aggregation step: We apply a transformer to combine the
+  `learned_features` over all sites. The `learned_features` are the input and
+  the output is a tensor of the same size. We then average the output over all
+  sites to be our final feature for each node.
 
 3. Final output step: The output from the previous step is passed through a
 linear layer, the `classifier` attribute, to produce a tensor in logit space, of
@@ -184,6 +185,15 @@ simpler aggregation method. We aggregate sites by simply outputting as feature
 the average of `learned_features[i]` over all sites.
 
 
+## Baseline Model
+
+As a baseline model to compare our neural network model to, we have implemented
+the `BaselineReversion` model. This model checks for every edge in the given
+tree if at any site there is a mutation back to a state that appeared at this
+site at an ancestor of this edge. If so, we label the edge as non-MP edge. This
+model does not require any training.
+
+
 ## Logging training
 
 To view training logs, run `tensorboard --logdir .` and direct your browser to
@@ -195,7 +205,7 @@ performance of classification on the test set.
 
 - `models.py`: contains definitions of models.
 
-- `wrapper.py`: contains wrappers for a model and a dataset.
+- `wrapper.py`: contains wrappers for models and datasets.
 
 
 ### File structure of companion repo `dpvt-experiments-1`
