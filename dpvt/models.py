@@ -766,7 +766,10 @@ class BaselineReversion(L.LightningModule):
         # Compute AUROC
         if torch.numel(masked_labels) > 0:
             self.auroc_metric(masked_pred, masked_labels)
-            
+            # Convert binary predictions (0/1) to probability format (0.0/1.0) for accuracy calculation
+            binary_probs = masked_pred.float()  # Convert to float if not already
+            self.accuracy_metric(binary_probs, masked_labels)
+
         return {"predictions": predictions, "labels": yb, "mask": mask}
     
     # Required by PyTorch Lightning but won't be used
@@ -791,7 +794,15 @@ class BaselineReversion(L.LightningModule):
         accuracy = self.accuracy_metric.compute()
         self.log("test_accuracy", accuracy.item(), on_step=False, on_epoch=True)
         
-        fpr, tpr, thresholds = self.roc_metric(preds, targets)
+        # Ensure preds are in proper probability format for ROC calculation
+        if preds.unique().numel() <= 2 and preds.max() <= 1.0:
+            # If binary predictions (0/1), use as is
+            roc_preds = preds.float()
+        else:
+            # Otherwise, normalize to 0-1 range
+            roc_preds = (preds - preds.min()) / (preds.max() - preds.min())
+
+        fpr, tpr, thresholds = self.roc_metric(roc_preds, targets)
         
         # Create ROC curve
         fig, ax = plt.subplots()
