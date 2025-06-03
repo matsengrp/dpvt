@@ -511,6 +511,5 @@ class Wraplet:
 
     def test(self):
         """Test the baseline model and return results"""
-        # Test the model - we don't need a checkpoint path since it's not trained
         results = self.trainer.test(self.model, self.test_loader)
         return results

@@ -690,10 +690,10 @@ class BaselineReversion(L.LightningModule):
         Take in a tree object and create a list with labels 0/1 containing for
         each node whether there is a reversion on the edge above the node
         """
-        max_n_sites = len(tree.sequence)
-        # Dictionary to keep track of all mutations between root and each node
+        n_sites = len(tree.sequence)
+        # Dictionary to keep track of all mutations between root and each node at each site
         node_mutation_history = {
-            node: {site: [] for site in range(max_n_sites)} for node in tree.traverse()
+            node: {site_idx: [] for site_idx in range(n_sites)} for node in tree.traverse()
         }
 
         # Result tensor storing reversion status for each node
@@ -710,15 +710,15 @@ class BaselineReversion(L.LightningModule):
 
             parent = node.up
             # For each site, track mutations
-            for site in range(max_n_sites):
+            for site_idx in range(n_sites):
                 # Copy parent's mutation history
-                node_mutation_history[node][site] = node_mutation_history[parent][
-                    site
+                node_mutation_history[node][site_idx] = node_mutation_history[parent][
+                    site_idx
                 ].copy()
 
                 # Add current mutation if it exists
-                n_seq = node.sequence[site]
-                p_seq = parent.sequence[site]
+                n_seq = node.sequence[site_idx]
+                p_seq = parent.sequence[site_idx]
 
                 if n_seq != p_seq:
                     # Create mutation vector
@@ -727,18 +727,16 @@ class BaselineReversion(L.LightningModule):
                     mut_vec[STATE_TO_IDX[p_seq]] -= 1
 
                     # Check if this is a reversion of any previous mutation
-                    for prev_mutation in node_mutation_history[node][site]:
+                    for prev_mutation in node_mutation_history[node][site_idx]:
                         if (
                             prev_mutation[STATE_TO_IDX[p_seq]] == 1
                             and prev_mutation[STATE_TO_IDX[n_seq]] == -1
                         ):
                             # Found a reversion!
                             reversion_labels[node_to_idx[node]] = 1
-                            # print(f"Found reversion at node {node_to_idx[node]}, site {site}: {p_seq} -> {n_seq}")
                             break
-
                     # Add this mutation to history
-                    node_mutation_history[node][site].append(mut_vec)
+                    node_mutation_history[node][site_idx].append(mut_vec)
 
         return reversion_labels
 
@@ -757,21 +755,22 @@ class BaselineReversion(L.LightningModule):
             predictions = self.forward(xb)
             max_num_leaves = yb.size(1)  # labels are already padded
             predictions = pad_sequence(predictions, batch_first=True, padding_value=0)
+        else:
+            raise TypeError(
+                f"Expected input to be of type ete3.Tree, "
+                f"but got {type(test_batch[0][0]).__name__}. "
+                f"This model only supports TreeDataset format."
+            )
 
         # Apply mask to focus on the edges we care about
         masked_pred = predictions[mask]
         masked_labels = yb[mask].int()
 
-        # # Print the actual predictions and labels
-        # print(f"Batch {batch_idx} - Predictions vs Labels:")
-        # for i, (pred, label) in enumerate(zip(masked_pred, masked_labels)):
-        #     print(f"Edge {i}: Prediction={pred.item():.4f}, Label={label.item()}")
-
         # Store predictions for ROC computation
         self.test_probs.append(masked_pred)
         self.test_targets.append(masked_labels)
 
-        # Compute AUROC
+        # Set up AUROC and accuracy metrics
         if torch.numel(masked_labels) > 0:
             self.auroc_metric(masked_pred, masked_labels)
             # Convert binary predictions (0/1) to probability format (0.0/1.0) for accuracy calculation
@@ -797,6 +796,7 @@ class BaselineReversion(L.LightningModule):
         preds = torch.cat(self.test_probs, dim=0)
         targets = torch.cat(self.test_targets, dim=0)
 
+        # Compute and save metrics
         auroc = self.auroc_metric.compute()
         self.log("test_auroc", auroc.item(), on_step=False, on_epoch=True)
         accuracy = self.accuracy_metric.compute()
