@@ -24,8 +24,8 @@ n_states = len(STATES)
 def custom_collate(items):
     """
     Args:
-        items is a list of (input, output, mask) tuples, where `input` is an ete3.Tree,
-        `output` is a float, and `mask` is a boolean
+        items is a list of (input, output, mask) tuples, where `input` is an
+        ete3.Tree, `output` is a float, and `mask` is a boolean
     """
     if type(items[0][0]) == Tree:
         return (
@@ -57,8 +57,8 @@ class TreeDataset(Dataset):
     def mask_pendant_edges(self, trees):
         masks = []
         for tree in trees:
-            # mask leaves, root (which is leaf) and root (which contains data for edge
-            # leading to root leaf)
+            # mask leaves, root (which is leaf) and root (which contains data
+            # for edge leading to root leaf)
             mask_list = [
                 not (node.is_leaf() or node.is_root() or node.up.is_root())
                 for node in tree.traverse("preorder")
@@ -77,16 +77,14 @@ class TreeDataset(Dataset):
 
 class TraversalDataset(Dataset):
     """Dataset where trees and mutations on trees are encoded as tensors.
-    The tensor `traversal` for contains for each tree all triples
-    (child1, child2, int_node) and all triples (sibling, parent, int_node)
-    for every internal node int_node that is below an internal edge.
-    Mutations are encoded by tensors of length 4 for each site with
-    entries 0,1, and -1 where -1 indicated the base that has been lost
-    from parent and 1 the base it mutated to. The bases are ordered
-    A,G,C,T. E.g. (1,0,-1,0) indicates mutation C -> A.
-    Labels indicate edges that are MP (0) vs non-MP (1) and mask
-    contains boolean values indicating whether edges are adjacent to
-    leaves"""
+    The tensor `traversal` for contains for each tree all triples (child1,
+    child2, int_node) and all triples (sibling, parent, int_node) for every
+    internal node int_node that is below an internal edge. Mutations are encoded
+    by tensors of length 4 for each site with entries 0,1, and -1 where -1
+    indicated the base that has been lost from parent and 1 the base it mutated
+    to. The bases are ordered A,G,C,T. E.g. (1,0,-1,0) indicates mutation C ->
+    A. Labels indicate edges that are MP (0) vs non-MP (1) and mask contains
+    boolean values indicating whether edges are adjacent to leaves"""
 
     def __init__(self, trees, labels, device):
         self.traversal, self.mutations = self.get_tensor_representation(trees)
@@ -113,9 +111,13 @@ class TraversalDataset(Dataset):
         max_n_sites = max([len(tree.sequence) for tree in trees])
         max_n_nodes = max([len(list(tree.traverse())) for tree in trees])
         max_n_int_nodes = max([len(tree) - 2 for tree in trees])
-        mutations = torch.full((len(trees), max_n_nodes, max_n_sites, 4), -1, dtype=torch.float32)
+        mutations = torch.full(
+            (len(trees), max_n_nodes, max_n_sites, 4), -1, dtype=torch.float32
+        )
         # from actual 0 entries representing no mutation
-        traversal = torch.full((len(trees), 2, max_n_int_nodes, 3), -1, dtype=torch.float32)
+        traversal = torch.full(
+            (len(trees), 2, max_n_int_nodes, 3), -1, dtype=torch.float32
+        )
         tree_index = 0
         # child and parent index in traversal
         for tree in trees:
@@ -177,19 +179,20 @@ class TraversalDataset(Dataset):
             tree_index += 1
         return traversal, mutations
 
-
     def mask_pendant_edges(self, trees):
         # Create list of tensors, each containing the mask for one tree
         masks = [
-            torch.tensor([
-                not (node.is_leaf() or node.is_root() or node.up.is_root())
-                for node in tree.traverse("preorder")
-            ], dtype=torch.bool)
+            torch.tensor(
+                [
+                    not (node.is_leaf() or node.is_root() or node.up.is_root())
+                    for node in tree.traverse("preorder")
+                ],
+                dtype=torch.bool,
+            )
             for tree in trees
         ]
         # Pad and stack all masks into a single tensor
         return pad_sequence(masks, batch_first=True, padding_value=False)
-
 
     def pad_labels(self, labels):
         label_tensors = [torch.tensor(label, dtype=torch.float32) for label in labels]
@@ -198,7 +201,25 @@ class TraversalDataset(Dataset):
 
 class Wrap:
     """
-    A class for wrapping a neural network model and a dataset.
+    Wrapper class for tree traversal neural network models.
+    args:
+        train_data: Dataset nickname for training
+        val_data: Dataset nickname for validation
+        test_data: Dataset nickname for testing
+        model: Model class or instance
+        log_path: Path to save logs and checkpoints
+        device: Device to use for training (e.g., "cpu", "cuda")
+        batch_size: Batch size for training
+        learning_rate: Learning rate for the optimizer
+        feature_length: Length of the feature vector
+        dim_mlp_layers: Dimension of MLP layers
+        epochs: Number of epochs for training
+        hyperparameter_path: Path to a JSON file with hyperparameters, which
+            replace the default parameters in the input here
+        profiling: Boolean indicating whether to use profiling
+        accum_grad_batches: Number of batches to accumulate gradients over
+        timestamp: Timestamp for logging
+        added_callbacks: List of additional callbacks for the trainer
     """
 
     def __init__(
@@ -228,8 +249,9 @@ class Wrap:
         self.profiling = profiling
         self.accum_grad_batches = accum_grad_batches
 
-        # If hyperparameter tuning has been done, read hyperparameters and use them from
-        # training
+        # If hyperparameter tuning has been done, read hyperparameters and use
+        # them from training
+        print("Hyperparameter path:", hyperparameter_path)
         if hyperparameter_path:
             print("Using best hyperparameters for ", log_path)
             with open(hyperparameter_path) as f:
@@ -259,9 +281,8 @@ class Wrap:
             self.model = model
 
         droplast = False
-        # if self.batch_size <= 64:
-        #     # drop last batch if we observe small batch size
-        #     droplast = True
+        # if self.batch_size <= 64: # drop last batch if we observe small batch
+        #     size droplast = True
         self.train_loader = DataLoader(
             train_data,
             batch_size=self.batch_size,
@@ -329,7 +350,17 @@ class Wrap:
 
 class HyperWrap:
     """
-    A class for hyperparameter optimization.
+    Wrapper class for hyperparameter optimization of tree traversal neural network models.
+    args:
+        train_data: Dataset nickname for training
+        val_data: Dataset nickname for validation
+        model: Model class or instance
+        log_path: Path to save logs and checkpoints
+        device: Device to use for training (e.g., "cpu", "cuda")
+        n_trials: Number of trials for hyperparameter optimization
+        checkpoint_dir: Directory to save checkpoints
+        profiling: Boolean indicating whether to use profiling
+        added_callbacks: List of additional callbacks for the trainer
     """
 
     def __init__(
@@ -359,16 +390,16 @@ class HyperWrap:
 
     def objective(self, trial):
         """
-        Objective function for Optuna Hyperparameter Optimization.
-        Returns validation loss.
+        Objective function for Optuna Hyperparameter Optimization. Returns
+        validation loss.
         """
         # Define hyperparameter search space
         learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True)
         batch_size = trial.suggest_categorical(
-            "batch_size", [2**x for x in range(4, 10)]
+            "batch_size", [2**x for x in range(1, 6)]
         )
         accum_grad_batches = trial.suggest_categorical(
-            "accum_grad_batches", range(1, 2)
+            "accum_grad_batches", range(1, 10)
         )
         epochs = trial.suggest_categorical("epochs", range(1, 300))
         # epochs = 200
@@ -426,12 +457,12 @@ class HyperWrap:
         hyperparams_filename,
     ):
         """
-        Function to perform hyperparameter optimization
-        Args:
-            hyperparams_filename: json file in which to store best hyperparameters
+        Function to perform hyperparameter optimization Args:
+            hyperparams_filename: json file in which to store best
+            hyperparameters
         """
         study = optuna.create_study(direction="minimize")
-        study.optimize(self.objective, self.n_trials, gc_after_trial=True)
+        study.optimize(self.objective, self.n_trials, gc_after_trial=True, n_jobs=4)
 
         best_hyperparameters = study.best_trial.params
         with open(hyperparams_filename, "w") as f:
@@ -439,3 +470,46 @@ class HyperWrap:
 
         print("Number of finished trials:", len(study.trials))
         print("Best trial:", study.best_trial.params)
+
+
+class Wraplet:
+    """
+    Lightweight wrapper class for baseline models that don't need to be trained.
+    args:
+        test_data: Dataset for testing
+        model: Model class or instance
+    """
+
+    def __init__(self, test_data, model, device="cpu"):
+        self.device = device
+        self.batch_size = len(test_data)
+
+        # Initialize the model
+        if isinstance(model, type):
+            # `model` is a class
+            self.model = model()
+        else:
+            # `model` is an instance of a class
+            self.model = model
+
+        # Create test loader
+        self.test_loader = DataLoader(
+            test_data,
+            batch_size=self.batch_size,
+            collate_fn=custom_collate,
+            num_workers=10,
+            drop_last=False,  # We typically want all data for evaluation
+        )
+
+        # Set up a simple trainer for testing only
+        self.trainer = L.Trainer(
+            accelerator=self.device,
+            devices=1,
+            enable_checkpointing=False,  # No need to save checkpoints for baseline model
+            logger=False,  # No need for logging during testing
+        )
+
+    def test(self):
+        """Test the baseline model and return results"""
+        results = self.trainer.test(self.model, self.test_loader)
+        return results
