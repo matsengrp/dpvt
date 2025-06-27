@@ -9,6 +9,9 @@ from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 from torch.utils.data import Dataset
 from ete3 import Tree
 from datetime import datetime
+from tqdm import tqdm
+import pickle
+import os
 
 todays_date = datetime.now().strftime("%Y-%m-%d")
 
@@ -43,10 +46,14 @@ def custom_collate(items):
 
 
 class TreeDataset(Dataset):
-    def __init__(self, data, labels):
+    def __init__(self, data, labels, preprocessed_path=None):
         self.data = data
         self.labels = self.add_padding(labels).to(torch.float64)
         self.mask = self.mask_pendant_edges(data)
+
+        # Load preprocessed data if path is provided
+        if preprocessed_path:
+            self.load_preprocessed_data(preprocessed_path)
 
     def __len__(self):
         return len(self.data)
@@ -74,6 +81,19 @@ class TreeDataset(Dataset):
         list_tensor = torch.tensor(padded_lists)
         return list_tensor
 
+    def save_preprocessed_data(self, file_path):
+        """Save the preprocessed tensor representations to a file."""
+        with open(file_path, "wb") as f:
+            pickle.dump((self.data, self.labels, self.mask), f)
+
+    def load_preprocessed_data(self, file_path):
+        """Load preprocessed tensor representations from a file."""
+        if os.path.exists(file_path):
+            with open(file_path, "rb") as f:
+                self.data, self.labels, self.mask = pickle.load(f)
+        else:
+            print(f"File {file_path} does not exist.")
+
 
 class TraversalDataset(Dataset):
     """Dataset where trees and mutations on trees are encoded as tensors.
@@ -86,11 +106,31 @@ class TraversalDataset(Dataset):
     A. Labels indicate edges that are MP (0) vs non-MP (1) and mask contains
     boolean values indicating whether edges are adjacent to leaves"""
 
-    def __init__(self, trees, labels, device):
-        self.traversal, self.mutations = self.get_tensor_representation(trees)
-        self.labels = self.pad_labels(labels)
-        self.mask = self.mask_pendant_edges(trees)
+    def __init__(
+        self,
+        trees=None,
+        labels=None,
+        traversal=None,
+        mutations=None,
+        traversal_labels=None,
+        mask=None,
+        device="cpu",
+        preprocessed_path=None,
+    ):
         self.device = device
+
+        # Load preprocessed data if path is provided
+        if preprocessed_path:
+            self.load_preprocessed_data(preprocessed_path)
+        elif trees is not None and labels is not None:
+            self.traversal, self.mutations = self.get_tensor_representation(trees)
+            self.labels = self.pad_labels(labels)
+            self.mask = self.mask_pendant_edges(trees)
+        else:
+            self.traversal = traversal
+            self.mutations = mutations
+            self.labels = traversal_labels
+            self.mask = mask
 
     def __len__(self):
         return len(self.labels)
@@ -120,7 +160,8 @@ class TraversalDataset(Dataset):
         )
         tree_index = 0
         # child and parent index in traversal
-        for tree in trees:
+        print(f"Start pre-processing {len(trees)} trees")
+        for tree in tqdm(trees, desc="Converting trees to tensor representation"):
             node_index_dict = {
                 node: index
                 for (node, index) in zip(
@@ -177,6 +218,7 @@ class TraversalDataset(Dataset):
                         except KeyError:
                             raise ValueError(f"Each node sequence must be in {STATES}")
             tree_index += 1
+        print("Finished pre-processing trees")
         return traversal, mutations
 
     def mask_pendant_edges(self, trees):
@@ -197,6 +239,19 @@ class TraversalDataset(Dataset):
     def pad_labels(self, labels):
         label_tensors = [torch.tensor(label, dtype=torch.float32) for label in labels]
         return pad_sequence(label_tensors, batch_first=True, padding_value=0)
+
+    def save_preprocessed_data(self, file_path):
+        """Save the preprocessed tensor representations to a file."""
+        with open(file_path, "wb") as f:
+            pickle.dump((self.traversal, self.mutations, self.labels, self.mask), f)
+
+    def load_preprocessed_data(self, file_path):
+        """Load preprocessed tensor representations from a file."""
+        if os.path.exists(file_path):
+            with open(file_path, "rb") as f:
+                self.traversal, self.mutations, self.labels, self.mask = pickle.load(f)
+        else:
+            print(f"File {file_path} does not exist.")
 
 
 class Wrap:
