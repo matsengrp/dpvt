@@ -8,6 +8,7 @@ from pytorch_lightning.profilers import AdvancedProfiler
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 from torch.utils.data import Dataset
 from ete3 import Tree
+import numpy as np
 from datetime import datetime
 from tqdm import tqdm
 import pickle
@@ -137,10 +138,18 @@ class TraversalDataset(Dataset):
         return len(self.labels)
 
     def __getitem__(self, idx):
-        traversal = self.traversal[idx]
-        mutations = self.mutations[idx]
-        labels = self.labels[idx]
-        mask = self.mask[idx]
+        # Handle memory-mapped arrays by copying to avoid reference issues
+        if isinstance(self.traversal, np.ndarray):
+            traversal = torch.from_numpy(self.traversal[idx].copy()).float()
+            mutations = torch.from_numpy(self.mutations[idx].copy()).float()
+            labels = torch.from_numpy(self.labels[idx].copy()).float()
+            mask = torch.from_numpy(self.mask[idx].copy()).bool()
+        else:
+            # Regular tensor access
+            traversal = self.traversal[idx]
+            mutations = self.mutations[idx]
+            labels = self.labels[idx]
+            mask = self.mask[idx]
         return (
             traversal,
             mutations,
@@ -247,12 +256,38 @@ class TraversalDataset(Dataset):
             pickle.dump((self.traversal, self.mutations, self.labels, self.mask), f)
 
     def load_preprocessed_data(self, file_path):
-        """Load preprocessed tensor representations from a file."""
-        if os.path.exists(file_path):
+        """Load preprocessed tensor representations from a file using memory-mapped arrays for large datasets."""
+        if not os.path.exists(file_path):
+            print(f"File {file_path} does not exist.")
+            return
+        
+        # Check if memory-mapped files exist
+        memmap_files = [
+            file_path.replace('.p', '_traversal.npy'),
+            file_path.replace('.p', '_mutations.npy'), 
+            file_path.replace('.p', '_labels.npy'),
+            file_path.replace('.p', '_mask.npy')
+        ]
+        
+        if all(os.path.exists(f) for f in memmap_files):
+            # Load from memory-mapped files
+            print(f"Loading from memory-mapped files for {file_path}")
+            self.traversal = np.load(memmap_files[0], mmap_mode='r')
+            self.mutations = np.load(memmap_files[1], mmap_mode='r')
+            self.labels = np.load(memmap_files[2], mmap_mode='r')
+            self.mask = np.load(memmap_files[3], mmap_mode='r')
+        else:
+            # First time: load pickle and create memory-mapped files
+            print(f"Converting {file_path} to memory-mapped format...")
             with open(file_path, "rb") as f:
                 self.traversal, self.mutations, self.labels, self.mask = pickle.load(f)
-        else:
-            print(f"File {file_path} does not exist.")
+            
+            # Save as memory-mapped arrays for future use
+            np.save(memmap_files[0], self.traversal)
+            np.save(memmap_files[1], self.mutations) 
+            np.save(memmap_files[2], self.labels)
+            np.save(memmap_files[3], self.mask)
+            print("Conversion complete - future loads will be memory-efficient")
 
 
 class Wrap:
