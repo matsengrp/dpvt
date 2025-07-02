@@ -117,7 +117,8 @@ class TraversalDataset(Dataset):
         device="cpu",
         preprocessed_path=None,
     ):
-        self.device = device
+        # Always keep data on CPU, will be moved to GPU in batches during training
+        self.device = "cpu"
 
         # Load preprocessed data if path is provided
         if preprocessed_path:

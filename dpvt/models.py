@@ -89,8 +89,7 @@ class TraverseNN(L.LightningModule):
         self.test_targets = []
 
     def data_to_device(self, dataset, device):
-        for data in dataset:
-            data = data.to(device)
+        return [data.to(device) for data in dataset]
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
@@ -117,7 +116,7 @@ class TraverseNN(L.LightningModule):
             pred = torch.stack(padded_fw_output)
         else:
             traversal, mutations, yb, mask = train_batch
-            self.data_to_device([traversal, mutations, yb, mask], self.device)
+            traversal, mutations, yb, mask = self.data_to_device([traversal, mutations, yb, mask], self.device)
             fw_output = [
                 self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
             ]
@@ -145,7 +144,7 @@ class TraverseNN(L.LightningModule):
             pred = torch.stack(padded_fw_output)
         else:
             traversal, mutations, yb, mask = val_batch
-            self.data_to_device([traversal, mutations, yb, mask], self.device)
+            traversal, mutations, yb, mask = self.data_to_device([traversal, mutations, yb, mask], self.device)
             fw_output = [
                 self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
             ]
@@ -171,7 +170,7 @@ class TraverseNN(L.LightningModule):
             pred = torch.stack(padded_fw_output)
         else:
             traversal, mutations, yb, mask = test_batch
-            self.data_to_device([traversal, mutations, yb, mask], self.device)
+            traversal, mutations, yb, mask = self.data_to_device([traversal, mutations, yb, mask], self.device)
             fw_output = [
                 self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
             ]
