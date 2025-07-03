@@ -260,31 +260,31 @@ class TraversalDataset(Dataset):
         if not os.path.exists(file_path):
             print(f"File {file_path} does not exist.")
             return
-        
+
         # Check if memory-mapped files exist
         memmap_files = [
-            file_path.replace('.p', '_traversal.npy'),
-            file_path.replace('.p', '_mutations.npy'), 
-            file_path.replace('.p', '_labels.npy'),
-            file_path.replace('.p', '_mask.npy')
+            file_path.replace(".p", "_traversal.npy"),
+            file_path.replace(".p", "_mutations.npy"),
+            file_path.replace(".p", "_labels.npy"),
+            file_path.replace(".p", "_mask.npy"),
         ]
-        
+
         if all(os.path.exists(f) for f in memmap_files):
             # Load from memory-mapped files
             print(f"Loading from memory-mapped files for {file_path}")
-            self.traversal = np.load(memmap_files[0], mmap_mode='r')
-            self.mutations = np.load(memmap_files[1], mmap_mode='r')
-            self.labels = np.load(memmap_files[2], mmap_mode='r')
-            self.mask = np.load(memmap_files[3], mmap_mode='r')
+            self.traversal = np.load(memmap_files[0], mmap_mode="r")
+            self.mutations = np.load(memmap_files[1], mmap_mode="r")
+            self.labels = np.load(memmap_files[2], mmap_mode="r")
+            self.mask = np.load(memmap_files[3], mmap_mode="r")
         else:
             # First time: load pickle and create memory-mapped files
             print(f"Converting {file_path} to memory-mapped format...")
             with open(file_path, "rb") as f:
                 self.traversal, self.mutations, self.labels, self.mask = pickle.load(f)
-            
+
             # Save as memory-mapped arrays for future use
             np.save(memmap_files[0], self.traversal)
-            np.save(memmap_files[1], self.mutations) 
+            np.save(memmap_files[1], self.mutations)
             np.save(memmap_files[2], self.labels)
             np.save(memmap_files[3], self.mask)
             print("Conversion complete - future loads will be memory-efficient")
