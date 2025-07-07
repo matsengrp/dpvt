@@ -319,7 +319,7 @@ class TraverseNN(L.LightningModule):
         output_feature.copy_(output)
 
     def forward_on_traversal(self, traversal, mutations):
-        """summarized_features = encoder_output.mean(dim=0)
+        """
         Compute features from traversal data structure, given one tree/traversal
         and corresponding mutations (for all sites), then aggregates and
         classifies.
