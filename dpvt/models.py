@@ -116,7 +116,9 @@ class TraverseNN(L.LightningModule):
             pred = torch.stack(padded_fw_output)
         else:
             traversal, mutations, yb, mask = train_batch
-            traversal, mutations, yb, mask = self.data_to_device([traversal, mutations, yb, mask], self.device)
+            traversal, mutations, yb, mask = self.data_to_device(
+                [traversal, mutations, yb, mask], self.device
+            )
             fw_output = [
                 self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
             ]
@@ -144,7 +146,9 @@ class TraverseNN(L.LightningModule):
             pred = torch.stack(padded_fw_output)
         else:
             traversal, mutations, yb, mask = val_batch
-            traversal, mutations, yb, mask = self.data_to_device([traversal, mutations, yb, mask], self.device)
+            traversal, mutations, yb, mask = self.data_to_device(
+                [traversal, mutations, yb, mask], self.device
+            )
             fw_output = [
                 self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
             ]
@@ -170,7 +174,9 @@ class TraverseNN(L.LightningModule):
             pred = torch.stack(padded_fw_output)
         else:
             traversal, mutations, yb, mask = test_batch
-            traversal, mutations, yb, mask = self.data_to_device([traversal, mutations, yb, mask], self.device)
+            traversal, mutations, yb, mask = self.data_to_device(
+                [traversal, mutations, yb, mask], self.device
+            )
             fw_output = [
                 self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
             ]
@@ -666,6 +672,128 @@ class TraverseAvgPooling(TraverseNN):
         return logit
 
 
+class LinearNN(TraverseNN):
+    """
+    Pytorch module inherited from TraverseNN, which replaces the MLP traverse_stack
+    with a simple linear layer (no hidden layer, no ReLU activation).
+    """
+
+    def __init__(self, learning_rate=0.01, feature_length=32, dim_mlp_layers=32):
+        # Initialize parent class but we'll override traverse_stack
+        # Note: dim_mlp_layers is accepted for compatibility but not used
+        super().__init__(
+            learning_rate=learning_rate,
+            feature_length=feature_length,
+            dim_mlp_layers=dim_mlp_layers,
+        )
+
+        # Override the traverse_stack with a simple linear layer
+        # Input: 2 * n_states + 2 * feature_length = 8 + 2 * feature_length
+        # Output: feature_length
+        self.traverse_stack = nn.Linear(
+            2 * n_states + 2 * self.feature_length, self.feature_length
+        )
+
+
+class LinearAvgPooling(LinearNN):
+    """
+    Pytorch module inherited from LinearNN (which uses a simple linear layer instead of MLP),
+    combined with average pooling for site aggregation instead of transformer.
+    """
+
+    def __init__(self, learning_rate=0.01, feature_length=32, dim_mlp_layers=32):
+        # Note: dim_mlp_layers is accepted for compatibility but not used
+        super().__init__(
+            learning_rate=learning_rate,
+            feature_length=feature_length,
+            dim_mlp_layers=dim_mlp_layers,
+        )
+        # Remove the transformer components since we're using averaging
+        delattr(self, "encoder_layer")
+        delattr(self, "encoder")
+
+    def site_aggregate(self, tree):
+        """
+        Takes an encoding of the root sequence of a tree and aggregates its
+        n_sites by averaging features across all sites
+        """
+        input_features = torch.stack(
+            [
+                torch.cat(
+                    (
+                        node.to_parent["clade_mutation_feature"],
+                        node.from_parent["clade_mutation_feature"],
+                    ),
+                    dim=1,
+                )
+                for node in tree.traverse(strategy="preorder")
+            ]
+        )
+        col_sums = input_features.mean(dim=1, keepdim=True)
+        return col_sums
+
+    def forward_on_traversal(self, traversal, mutations):
+        """
+        Compute features from traversal data structure, given one tree/traversal
+        and corresponding mutations (for all sites), then aggregate and
+        classify.
+        """
+        learned_features = self.traversal_on_traversal(traversal, mutations)
+        output = learned_features.mean(dim=1, keepdim=True)
+        logit = self.classifier(output[:, 0])
+        return logit
+
+
+class LinearMaxPooling(LinearNN):
+    """
+    Pytorch module inherited from LinearNN (which uses a simple linear layer instead of MLP),
+    combined with max pooling for site aggregation instead of transformer.
+    """
+
+    def __init__(self, learning_rate=0.01, feature_length=32, dim_mlp_layers=32):
+        # Note: dim_mlp_layers is accepted for compatibility but not used
+        super().__init__(
+            learning_rate=learning_rate,
+            feature_length=feature_length,
+            dim_mlp_layers=dim_mlp_layers,
+        )
+        # Remove the transformer components since we're using max pooling
+        delattr(self, "encoder_layer")
+        delattr(self, "encoder")
+
+    def site_aggregate(self, tree):
+        """
+        Takes an encoding of the root sequence of a tree and aggregates its
+        n_sites by choosing the max entry of each feature position over all
+        sites
+        """
+        input_features = torch.stack(
+            [
+                torch.cat(
+                    (
+                        node.to_parent["clade_mutation_feature"],
+                        node.from_parent["clade_mutation_feature"],
+                    ),
+                    dim=1,
+                )
+                for node in tree.traverse(strategy="preorder")
+            ]
+        )
+        max_values, _ = torch.max(input_features, dim=1, keepdim=True)
+        return max_values
+
+    def forward_on_traversal(self, traversal, mutations):
+        """
+        Compute features from traversal datastructure, given one tree/traversal
+        and corresponding mutations (for all sites), then aggregates and
+        classifies.
+        """
+        learned_features = self.traversal_on_traversal(traversal, mutations)
+        output, _ = torch.max(learned_features, dim=1, keepdim=True)
+        logit = self.classifier(output[:, 0])
+        return logit
+
+
 class BaselineReversion(L.LightningModule):
     """
     Baseline model we compare our deep learning models to. This model detects
@@ -692,7 +820,8 @@ class BaselineReversion(L.LightningModule):
         n_sites = len(tree.sequence)
         # Dictionary to keep track of all mutations between root and each node at each site
         node_mutation_history = {
-            node: {site_idx: [] for site_idx in range(n_sites)} for node in tree.traverse()
+            node: {site_idx: [] for site_idx in range(n_sites)}
+            for node in tree.traverse()
         }
 
         # Result tensor storing reversion status for each node
