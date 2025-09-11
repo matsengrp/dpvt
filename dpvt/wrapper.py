@@ -272,10 +272,10 @@ class TraversalDataset(Dataset):
         if all(os.path.exists(f) for f in memmap_files):
             # Load from memory-mapped files
             print(f"Loading from memory-mapped files for {file_path}")
-            self.traversal = np.load(memmap_files[0], mmap_mode="r")
-            self.mutations = np.load(memmap_files[1], mmap_mode="r")
-            self.labels = np.load(memmap_files[2], mmap_mode="r")
-            self.mask = np.load(memmap_files[3], mmap_mode="r")
+            self.traversal = torch.from_numpy(np.load(memmap_files[0], mmap_mode="r"))
+            self.mutations = torch.from_numpy(np.load(memmap_files[1], mmap_mode="r"))
+            self.labels = torch.from_numpy(np.load(memmap_files[2], mmap_mode="r"))
+            self.mask = torch.from_numpy(np.load(memmap_files[3], mmap_mode="r"))
         else:
             # First time: load pickle and create memory-mapped files
             print(f"Converting {file_path} to memory-mapped format...")
