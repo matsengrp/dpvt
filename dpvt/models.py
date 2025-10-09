@@ -116,7 +116,9 @@ class TraverseNN(L.LightningModule):
             pred = torch.stack(padded_fw_output)
         else:
             traversal, mutations, yb, mask = train_batch
-            traversal, mutations, yb, mask = self.data_to_device([traversal, mutations, yb, mask], self.device)
+            traversal, mutations, yb, mask = self.data_to_device(
+                [traversal, mutations, yb, mask], self.device
+            )
             fw_output = [
                 self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
             ]
@@ -144,7 +146,9 @@ class TraverseNN(L.LightningModule):
             pred = torch.stack(padded_fw_output)
         else:
             traversal, mutations, yb, mask = val_batch
-            traversal, mutations, yb, mask = self.data_to_device([traversal, mutations, yb, mask], self.device)
+            traversal, mutations, yb, mask = self.data_to_device(
+                [traversal, mutations, yb, mask], self.device
+            )
             fw_output = [
                 self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
             ]
@@ -170,7 +174,9 @@ class TraverseNN(L.LightningModule):
             pred = torch.stack(padded_fw_output)
         else:
             traversal, mutations, yb, mask = test_batch
-            traversal, mutations, yb, mask = self.data_to_device([traversal, mutations, yb, mask], self.device)
+            traversal, mutations, yb, mask = self.data_to_device(
+                [traversal, mutations, yb, mask], self.device
+            )
             fw_output = [
                 self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
             ]
@@ -660,6 +666,8 @@ class TraverseAvgPooling(TraverseNN):
         and corresponding mutations (for all sites), then aggregate and
         classify.
         """
+        print("traversal", traversal)
+        print("mutations", mutations)
         learned_features = self.traversal_on_traversal(traversal, mutations)
         output = learned_features.mean(dim=1, keepdim=True)
         logit = self.classifier(output[:, 0])
@@ -692,7 +700,8 @@ class BaselineReversion(L.LightningModule):
         n_sites = len(tree.sequence)
         # Dictionary to keep track of all mutations between root and each node at each site
         node_mutation_history = {
-            node: {site_idx: [] for site_idx in range(n_sites)} for node in tree.traverse()
+            node: {site_idx: [] for site_idx in range(n_sites)}
+            for node in tree.traverse()
         }
 
         # Result tensor storing reversion status for each node
