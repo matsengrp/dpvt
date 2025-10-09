@@ -89,8 +89,7 @@ class TraverseNN(L.LightningModule):
         self.test_targets = []
 
     def data_to_device(self, dataset, device):
-        for data in dataset:
-            data = data.to(device)
+        return [data.to(device) for data in dataset]
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
@@ -117,7 +116,9 @@ class TraverseNN(L.LightningModule):
             pred = torch.stack(padded_fw_output)
         else:
             traversal, mutations, yb, mask = train_batch
-            self.data_to_device([traversal, mutations, yb, mask], self.device)
+            traversal, mutations, yb, mask = self.data_to_device(
+                [traversal, mutations, yb, mask], self.device
+            )
             fw_output = [
                 self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
             ]
@@ -145,7 +146,9 @@ class TraverseNN(L.LightningModule):
             pred = torch.stack(padded_fw_output)
         else:
             traversal, mutations, yb, mask = val_batch
-            self.data_to_device([traversal, mutations, yb, mask], self.device)
+            traversal, mutations, yb, mask = self.data_to_device(
+                [traversal, mutations, yb, mask], self.device
+            )
             fw_output = [
                 self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
             ]
@@ -171,7 +174,9 @@ class TraverseNN(L.LightningModule):
             pred = torch.stack(padded_fw_output)
         else:
             traversal, mutations, yb, mask = test_batch
-            self.data_to_device([traversal, mutations, yb, mask], self.device)
+            traversal, mutations, yb, mask = self.data_to_device(
+                [traversal, mutations, yb, mask], self.device
+            )
             fw_output = [
                 self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
             ]
@@ -320,7 +325,7 @@ class TraverseNN(L.LightningModule):
         output_feature.copy_(output)
 
     def forward_on_traversal(self, traversal, mutations):
-        """summarized_features = encoder_output.mean(dim=0)
+        """
         Compute features from traversal data structure, given one tree/traversal
         and corresponding mutations (for all sites), then aggregates and
         classifies.
@@ -693,7 +698,8 @@ class BaselineReversion(L.LightningModule):
         n_sites = len(tree.sequence)
         # Dictionary to keep track of all mutations between root and each node at each site
         node_mutation_history = {
-            node: {site_idx: [] for site_idx in range(n_sites)} for node in tree.traverse()
+            node: {site_idx: [] for site_idx in range(n_sites)}
+            for node in tree.traverse()
         }
 
         # Result tensor storing reversion status for each node
@@ -830,3 +836,42 @@ class BaselineReversion(L.LightningModule):
         self.test_targets.clear()
         self.roc_metric.reset()
         self.accuracy_metric.reset()
+
+
+class BaselineSubCount(BaselineReversion):
+    """
+    Baseline model we compare our deep learning models to. This model counts the
+    number of substitutions on an edge and if there are more then the median
+    number of substitutions per edge, labels it as non-MP. This model requires
+    the input to be in the format of a TreeDataset.
+    """
+
+    def get_sub_count_labels_from_tree(self, tree):
+        """
+        Take in a tree object and create a list with labels 0/1 containing for
+        each node whether there the number of substitutions is larger than times
+        the median number of substitutions per edge on the edge above the node
+        """
+        n_mutations = torch.zeros(len(list(tree.traverse())), dtype=torch.float32)
+        node_to_idx = {node: i for i, node in enumerate(tree.traverse("preorder"))}
+
+        for node in tree.traverse("preorder"):
+            if node.is_root() or node.is_leaf():
+                continue
+            parent = node.up
+            n_seq = node.sequence
+            p_seq = parent.sequence
+            count = sum(1 for a, b in zip(n_seq, p_seq) if a != b)
+            n_mutations[node_to_idx[node]] = count
+
+        median = torch.median(n_mutations[n_mutations > 0])
+        print("median number of mutations per edge:", median)
+        labels = (n_mutations >= 1 / 2 * median).int()
+
+        return labels
+
+    def forward(self, batch):
+        """Apply the reversion detection to the input batch"""
+        # Input is a list of trees
+        labels = [self.get_sub_count_labels_from_tree(tree) for tree in batch]
+        return labels
