@@ -666,8 +666,6 @@ class TraverseAvgPooling(TraverseNN):
         and corresponding mutations (for all sites), then aggregate and
         classify.
         """
-        print("traversal", traversal)
-        print("mutations", mutations)
         learned_features = self.traversal_on_traversal(traversal, mutations)
         output = learned_features.mean(dim=1, keepdim=True)
         logit = self.classifier(output[:, 0])
