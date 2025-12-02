@@ -3,7 +3,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torchmetrics import AUROC
-from torchmetrics.classification import BinaryROC, BinaryAccuracy
+from torchmetrics.classification import BinaryROC, BinaryAccuracy, BinaryConfusionMatrix
 from torch.nn.utils.rnn import pad_sequence
 
 import matplotlib
@@ -344,16 +344,12 @@ class TraverseNN(L.LightningModule):
         max_seq_length = mutations.size(1)
         device = traversal.device
 
-        # Initialize an empty list to store features for each node
-        node_features = []
+        # Initialize a single preallocated tensor to store features for all nodes
+        # Shape: (max_node, 2, max_seq_length, feature_length)
         max_node = len(mutations)
-
-        for node in range(max_node):
-            # For each node, create minimal initial features This could be empty
-            # or minimal depending on your needs
-            node_features.append(
-                torch.zeros(2, max_seq_length, self.feature_length).to(device)
-            )
+        node_features = torch.zeros(
+            max_node, 2, max_seq_length, self.feature_length, device=device
+        )
 
         for i, direction in enumerate(traversal):
             sign = -1 if i == 1 else 1
@@ -379,19 +375,19 @@ class TraverseNN(L.LightningModule):
                 combined_data = torch.cat(
                     (
                         mutation1,
-                        node_features[adj_node1][i],
+                        node_features[adj_node1, i],
                         mutation2,
-                        node_features[adj_node2][i],
+                        node_features[adj_node2, i],
                     ),
                     dim=1,
                 )
 
                 # Update just the features we need
-                node_features[current_node][i] = self.traverse_stack(combined_data)
-        # Combine all features
-        learned_features = torch.stack(node_features)
-        learned_features = learned_features.reshape(
-            len(mutations), max_seq_length, 2 * self.feature_length
+                node_features[current_node, i] = self.traverse_stack(combined_data)
+        # Reshape features: node_features is already (max_node, 2, max_seq_length, feature_length)
+        # We need (max_node, max_seq_length, 2 * feature_length)
+        learned_features = node_features.permute(0, 2, 1, 3).reshape(
+            max_node, max_seq_length, 2 * self.feature_length
         )
         return learned_features
 
@@ -681,6 +677,7 @@ class BaselineReversion(L.LightningModule):
         self.roc_metric = BinaryROC()
         self.auroc_metric = AUROC(task="binary")
         self.accuracy_metric = BinaryAccuracy()
+        self.confusion_matrix_metric = BinaryConfusionMatrix()
         # Temporary storage for probabilities and targets
         self.test_probs = []
         self.test_targets = []
@@ -755,6 +752,7 @@ class BaselineReversion(L.LightningModule):
             predictions = self.forward(xb)
             max_num_leaves = yb.size(1)  # labels are already padded
             predictions = pad_sequence(predictions, batch_first=True, padding_value=0)
+
         else:
             raise TypeError(
                 f"Expected input to be of type ete3.Tree, "
@@ -776,6 +774,7 @@ class BaselineReversion(L.LightningModule):
             # Convert binary predictions (0/1) to probability format (0.0/1.0) for accuracy calculation
             binary_probs = masked_pred.float()  # Convert to float if not already
             self.accuracy_metric(binary_probs, masked_labels)
+            self.confusion_matrix_metric(binary_probs, masked_labels)
 
         return {"predictions": predictions, "labels": yb, "mask": mask}
 
@@ -795,12 +794,24 @@ class BaselineReversion(L.LightningModule):
 
         preds = torch.cat(self.test_probs, dim=0)
         targets = torch.cat(self.test_targets, dim=0)
-
         # Compute and save metrics
         auroc = self.auroc_metric.compute()
         self.log("test_auroc", auroc.item(), on_step=False, on_epoch=True)
         accuracy = self.accuracy_metric.compute()
         self.log("test_accuracy", accuracy.item(), on_step=False, on_epoch=True)
+
+        # Compute confusion matrix and extract TP, FP, TN, FN
+        confusion_matrix = self.confusion_matrix_metric.compute()
+        # confusion_matrix has shape [[TN, FP], [FN, TP]]
+        tn = confusion_matrix[0, 0].item()
+        fp = confusion_matrix[0, 1].item()
+        fn = confusion_matrix[1, 0].item()
+        tp = confusion_matrix[1, 1].item()
+
+        self.log("test_true_negatives", tn, on_step=False, on_epoch=True)
+        self.log("test_false_positives", fp, on_step=False, on_epoch=True)
+        self.log("test_false_negatives", fn, on_step=False, on_epoch=True)
+        self.log("test_true_positives", tp, on_step=False, on_epoch=True)
 
         # Ensure preds are in proper probability format for ROC calculation
         if preds.unique().numel() <= 2 and preds.max() <= 1.0:
@@ -830,3 +841,4 @@ class BaselineReversion(L.LightningModule):
         self.test_targets.clear()
         self.roc_metric.reset()
         self.accuracy_metric.reset()
+        self.confusion_matrix_metric.reset()
