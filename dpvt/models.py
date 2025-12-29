@@ -88,10 +88,6 @@ class TraverseNN(L.LightningModule):
         self.test_probs = []
         self.test_targets = []
 
-    def data_to_device(self, dataset, device):
-        for data in dataset:
-            data = data.to(device)
-
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         return optimizer
@@ -103,90 +99,68 @@ class TraverseNN(L.LightningModule):
         masked_loss = loss * mask.unsqueeze(-1)  # element-wise multiplication
         return masked_loss.mean()
 
-    def training_step(self, train_batch, batch_idx):
-        if type(train_batch[0][0]) == Tree:
-            xb, yb, mask = train_batch
-            max_seq_length = max([len(tree.sequence) for tree in xb])
-            # needed for padding if trees have different lengths sequences
-            fw_output = [self.forward_on_tree(item, max_seq_length) for item in xb]
-            # padding if trees have varying number of leaves
-            max_length = yb.size(1)
-            padded_fw_output = [
-                F.pad(l, (0, 0, 0, max_length - l.size(0))) for l in fw_output
+    def _process_batch(self, batch):
+        """
+        Process a batch of data and return predictions, labels, and mask.
+
+        Handles both Tree dataset format (trees, labels, mask) and
+        traversal dataset format (traversal, mutations, labels, mask).
+
+        Returns:
+            tuple: (pred, labels, mask) where pred contains logits
+        """
+        if isinstance(batch[0][0], Tree):
+            trees, labels, mask = batch
+            max_seq_length = max(len(tree.sequence) for tree in trees)
+            predictions = [self.forward_on_tree(item, max_seq_length) for item in trees]
+            # Pad predictions if trees have varying number of leaves
+            max_length = labels.size(1)
+            padded_predictions = [
+                F.pad(p, (0, 0, 0, max_length - p.size(0))) for p in predictions
             ]
-            pred = torch.stack(padded_fw_output)
+            pred = torch.stack(padded_predictions)
         else:
-            traversal, mutations, yb, mask = train_batch
-            self.data_to_device([traversal, mutations, yb, mask], self.device)
-            fw_output = [
+            traversal, mutations, labels, mask = batch
+            predictions = [
                 self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
             ]
-            pred = torch.stack(fw_output)
+            pred = torch.stack(predictions)
+        return pred, labels, mask
+
+    def training_step(self, train_batch, batch_idx):
+        pred, labels, mask = self._process_batch(train_batch)
         prob_predictions = F.sigmoid(pred)
-        pos_predictions = prob_predictions[yb < 0.5]
-        neg_predictions = prob_predictions[yb >= 0.5]
-        self.log("pos_prediction_avg", torch.mean(pos_predictions), prog_bar=True)
-        self.log("neg_prediction_avg", torch.mean(neg_predictions), prog_bar=True)
-        loss = self.masked_bce_loss(pred, yb, mask)
-        self.log("train_loss", loss.item(), on_epoch=True, batch_size=len(yb))
+        # labels < 0.5 selects edges IN MP tree (label=0), labels >= 0.5 selects edges NOT in MP tree (label=1)
+        mp_edge_predictions = prob_predictions[labels < 0.5]
+        non_mp_edge_predictions = prob_predictions[labels >= 0.5]
+        self.log("mp_edge_pred_avg", torch.mean(mp_edge_predictions), prog_bar=True)
+        self.log("non_mp_edge_pred_avg", torch.mean(non_mp_edge_predictions), prog_bar=True)
+        loss = self.masked_bce_loss(pred, labels, mask)
+        self.log("train_loss", loss.item(), on_epoch=True, batch_size=len(labels))
         return loss
 
     def validation_step(self, val_batch, batch_idx):
-        if type(val_batch[0][0]) == Tree:
-            xb, yb, mask = val_batch
-            max_seq_length = max([len(tree.sequence) for tree in xb])
-            # needed for padding if trees have different lengths sequences
-            fw_output = [self.forward_on_tree(item, max_seq_length) for item in xb]
-            # padding if trees have varying number of leaves
-            max_length = yb.size(1)
-            padded_fw_output = [
-                F.pad(l, (0, 0, 0, max_length - l.size(0))) for l in fw_output
-            ]
-            pred = torch.stack(padded_fw_output)
-        else:
-            traversal, mutations, yb, mask = val_batch
-            self.data_to_device([traversal, mutations, yb, mask], self.device)
-            fw_output = [
-                self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
-            ]
-            pred = torch.stack(fw_output)
-        loss = self.masked_bce_loss(pred, yb, mask)
+        pred, labels, mask = self._process_batch(val_batch)
+        loss = self.masked_bce_loss(pred, labels, mask)
         self.log(
-            "val_loss", loss.item(), on_epoch=True, prog_bar=True, batch_size=len(yb)
+            "val_loss", loss.item(), on_epoch=True, prog_bar=True, batch_size=len(labels)
         )
         # Return the batch loss so it can be accumulated later
         return loss
 
     def test_step(self, test_batch):
-        if type(test_batch[0][0]) == Tree:
-            xb, yb, mask = test_batch
-            max_seq_length = max([len(tree.sequence) for tree in xb])
-            # needed for padding if trees have different lengths sequences
-            fw_output = [self.forward_on_tree(item, max_seq_length) for item in xb]
-            # padding if trees have varying number of leaves
-            max_length = yb.size(1)
-            padded_fw_output = [
-                F.pad(l, (0, 0, 0, max_length - l.size(0))) for l in fw_output
-            ]
-            pred = torch.stack(padded_fw_output)
-        else:
-            traversal, mutations, yb, mask = test_batch
-            self.data_to_device([traversal, mutations, yb, mask], self.device)
-            fw_output = [
-                self.forward_on_traversal(t, m) for (t, m) in zip(traversal, mutations)
-            ]
-            pred = torch.stack(fw_output)
+        pred, labels, mask = self._process_batch(test_batch)
         # only get unmasked output
         masked_pred = pred[mask]
-        masked_yb = yb[mask].unsqueeze(-1).int()
+        masked_labels = labels[mask].unsqueeze(-1).int()
         self.test_probs.append(masked_pred)
-        self.test_targets.append(masked_yb)
-        if torch.numel(masked_yb) > 0:  # Check if there are any unmasked elements
-            self.auroc_metric(masked_pred, masked_yb)
+        self.test_targets.append(masked_labels)
+        if torch.numel(masked_labels) > 0:  # Check if there are any unmasked elements
+            self.auroc_metric(masked_pred, masked_labels)
             probs = torch.sigmoid(masked_pred)
-            self.accuracy_metric(probs, masked_yb)
-            loss = self.masked_bce_loss(pred, yb, mask)
-            self.log("test_loss", loss.item(), batch_size=len(yb))
+            self.accuracy_metric(probs, masked_labels)
+            loss = self.masked_bce_loss(pred, labels, mask)
+            self.log("test_loss", loss.item(), batch_size=len(labels))
         else:
             warnings.warn("Your test data is very small, or there is a bug")
         return {}
@@ -352,7 +326,6 @@ class TraverseNN(L.LightningModule):
         )
 
         for i, direction in enumerate(traversal):
-            sign = -1 if i == 1 else 1
             for node_list in direction:
                 # first two nodes in list have feature already, we learn feature
                 # for third node in list
@@ -747,10 +720,10 @@ class BaselineReversion(L.LightningModule):
         """Test step that handles both tree datasets and tensor datasets"""
         if type(test_batch[0][0]) == Tree:
             # Input is tree dataset
-            xb, yb, mask = test_batch
-            max_seq_length = max([len(tree.sequence) for tree in xb])
-            predictions = self.forward(xb)
-            max_num_leaves = yb.size(1)  # labels are already padded
+            trees, labels, mask = test_batch
+            max_seq_length = max([len(tree.sequence) for tree in trees])
+            predictions = self.forward(trees)
+            max_num_leaves = labels.size(1)  # labels are already padded
             predictions = pad_sequence(predictions, batch_first=True, padding_value=0)
 
         else:
@@ -762,7 +735,7 @@ class BaselineReversion(L.LightningModule):
 
         # Apply mask to focus on the edges we care about
         masked_pred = predictions[mask]
-        masked_labels = yb[mask].int()
+        masked_labels = labels[mask].int()
 
         # Store predictions for ROC computation
         self.test_probs.append(masked_pred)
@@ -776,7 +749,7 @@ class BaselineReversion(L.LightningModule):
             self.accuracy_metric(binary_probs, masked_labels)
             self.confusion_matrix_metric(binary_probs, masked_labels)
 
-        return {"predictions": predictions, "labels": yb, "mask": mask}
+        return {"predictions": predictions, "labels": labels, "mask": mask}
 
     # Required by PyTorch Lightning but won't be used
     def configure_optimizers(self):
