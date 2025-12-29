@@ -266,7 +266,7 @@ class TraverseNN(L.LightningModule):
                 return F.sigmoid(logit)
         # assume input is a list (or iterable) of trees
         if type(input[0]) == Tree:
-            max_seq_length = max([tree.sequence for tree in input])
+            max_seq_length = max([len(tree.sequence) for tree in input])
             logits = torch.stack(
                 [self.forward_on_tree(item, max_seq_length) for item in input]
             )
@@ -384,8 +384,7 @@ class TraverseNN(L.LightningModule):
 
                 # Update just the features we need
                 node_features[current_node, i] = self.traverse_stack(combined_data)
-        # Reshape features: node_features is already (max_node, 2, max_seq_length, feature_length)
-        # We need (max_node, max_seq_length, 2 * feature_length)
+        # Concatenate features -> (max_node, max_seq_length, 2 * feature_length)
         learned_features = node_features.permute(0, 2, 1, 3).reshape(
             max_node, max_seq_length, 2 * self.feature_length
         )
@@ -480,7 +479,7 @@ class TraverseNN(L.LightningModule):
         )
         # learned_features dim = (n_nodes, n_sites, d_model=8)
         learned_features.transpose(0, 1)
-        attention_masks = (learned_features == 0).any(dim=2).transpose(0, 1).double()
+        attention_masks = (learned_features == 0).any(dim=2).transpose(0, 1)
         encoder_output = self.encoder(
             learned_features, src_key_padding_mask=attention_masks
         )
@@ -690,7 +689,8 @@ class BaselineReversion(L.LightningModule):
         n_sites = len(tree.sequence)
         # Dictionary to keep track of all mutations between root and each node at each site
         node_mutation_history = {
-            node: {site_idx: [] for site_idx in range(n_sites)} for node in tree.traverse()
+            node: {site_idx: [] for site_idx in range(n_sites)}
+            for node in tree.traverse()
         }
 
         # Result tensor storing reversion status for each node
