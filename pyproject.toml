@@ -16,7 +16,10 @@ dependencies = [
     "click",
     "ete3>=3.0.0",
     "lightning>=2.2.0",
+    "matplotlib",
+    "optuna",
     "pytest>=7.3",
+    "six",
     "torch>=2.0.0",
 ]
 classifiers = [

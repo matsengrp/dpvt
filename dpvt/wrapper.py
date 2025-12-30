@@ -64,14 +64,19 @@ class TreeDataset(Dataset):
                 for node in tree.traverse("preorder")
             ]
             masks.append(mask_list)
-        mask_tensor = self.add_padding(masks)
+        mask_tensor = self.add_padding(masks, dtype=torch.bool, padding_value=False)
         return mask_tensor
 
-    def add_padding(self, list):
-        # add padding with zeros - can be used for labels and masks
+    def add_padding(self, list, dtype=None, padding_value=0):
+        # add padding - can be used for labels and masks
+        # dtype: if specified, the tensor will be created with this dtype
+        # padding_value: value to use for padding (default: 0)
         max_length = max(len(item) for item in list)
-        padded_lists = [item + [0] * (max_length - len(item)) for item in list]
-        list_tensor = torch.tensor(padded_lists)
+        padded_lists = [item + [padding_value] * (max_length - len(item)) for item in list]
+        if dtype is not None:
+            list_tensor = torch.tensor(padded_lists, dtype=dtype, device='cpu')
+        else:
+            list_tensor = torch.tensor(padded_lists, device='cpu')
         return list_tensor
 
 
@@ -108,19 +113,31 @@ class TraversalDataset(Dataset):
         )
 
     def get_tensor_representation(self, trees):
+        print(f"Preprocessing {len(trees)} trees into tensor representation...")
+        print("  Step 1/4: Computing maximum dimensions...")
         max_n_sites = max([len(tree.sequence) for tree in trees])
         max_n_nodes = max([len(list(tree.traverse())) for tree in trees])
         max_n_int_nodes = max([len(tree) - 2 for tree in trees])
+        print(f"    Max sites: {max_n_sites}, Max nodes: {max_n_nodes}, Max internal nodes: {max_n_int_nodes}")
+
+        print("  Step 2/4: Allocating tensors...")
         mutations = torch.full(
-            (len(trees), max_n_nodes, max_n_sites, 4), -1, dtype=torch.float32
+            (len(trees), max_n_nodes, max_n_sites, 4), -1, dtype=torch.float32, device='cpu'
         )
         # from actual 0 entries representing no mutation
         traversal = torch.full(
-            (len(trees), 2, max_n_int_nodes, 3), -1, dtype=torch.float32
+            (len(trees), 2, max_n_int_nodes, 3), -1, dtype=torch.float32, device='cpu'
         )
+        tensor_size_gb = (mutations.numel() + traversal.numel()) * 4 / (1024**3)
+        print(f"    Allocated {tensor_size_gb:.6f} GB of tensors")
+
+        print("  Step 3/4: Processing trees (this may take a while)...")
         tree_index = 0
+        report_interval = max(1, len(trees) // 20)  # Report every 5% progress
         # child and parent index in traversal
         for tree in trees:
+            if tree_index % report_interval == 0:
+                print(f"    Progress: {tree_index}/{len(trees)} trees ({100*tree_index/len(trees):.1f}%)")
             node_index_dict = {
                 node: index
                 for (node, index) in zip(
@@ -177,10 +194,13 @@ class TraversalDataset(Dataset):
                         except KeyError:
                             raise ValueError(f"Each node sequence must be in {STATES}")
             tree_index += 1
+        print(f"    Progress: {len(trees)}/{len(trees)} trees (100.0%)")
+        print("  Step 4/4: Tensor representation complete!")
         return traversal, mutations
 
     def mask_pendant_edges(self, trees):
         # Create list of tensors, each containing the mask for one tree
+        print(f"Creating pendant edge masks for {len(trees)} trees...")
         masks = [
             torch.tensor(
                 [
@@ -188,15 +208,22 @@ class TraversalDataset(Dataset):
                     for node in tree.traverse("preorder")
                 ],
                 dtype=torch.bool,
+                device='cpu',
             )
             for tree in trees
         ]
         # Pad and stack all masks into a single tensor
-        return pad_sequence(masks, batch_first=True, padding_value=False)
+        print("  Padding and stacking masks...")
+        result = pad_sequence(masks, batch_first=True, padding_value=False)
+        print("  Masking complete!")
+        return result
 
     def pad_labels(self, labels):
-        label_tensors = [torch.tensor(label, dtype=torch.float32) for label in labels]
-        return pad_sequence(label_tensors, batch_first=True, padding_value=0)
+        print(f"Padding labels for {len(labels)} trees...")
+        label_tensors = [torch.tensor(label, dtype=torch.float32, device='cpu') for label in labels]
+        result = pad_sequence(label_tensors, batch_first=True, padding_value=0)
+        print("  Label padding complete!")
+        return result
 
 
 class Wrap:
@@ -283,26 +310,32 @@ class Wrap:
         droplast = False
         # if self.batch_size <= 64: # drop last batch if we observe small batch
         #     size droplast = True
+        # Use fewer workers to avoid GPU memory issues with large datasets
+        # pin_memory helps transfer data to GPU efficiently
+        num_workers = 2 if self.device in ["cuda", "gpu"] else 10
         self.train_loader = DataLoader(
             train_data,
             batch_size=self.batch_size,
             collate_fn=custom_collate,
-            num_workers=10,
+            num_workers=num_workers,
             drop_last=droplast,
+            pin_memory=True if self.device in ["cuda", "gpu"] else False,
         )
         self.val_loader = DataLoader(
             val_data,
             batch_size=self.batch_size,
             collate_fn=custom_collate,
-            num_workers=10,
+            num_workers=num_workers,
             drop_last=droplast,
+            pin_memory=True if self.device in ["cuda", "gpu"] else False,
         )
         self.test_loader = DataLoader(
             test_data,
             batch_size=self.batch_size,
             collate_fn=custom_collate,
-            num_workers=10,
+            num_workers=num_workers,
             drop_last=droplast,
+            pin_memory=True if self.device in ["cuda", "gpu"] else False,
         )
 
         logger = TensorBoardLogger(

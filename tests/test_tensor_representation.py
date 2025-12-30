@@ -63,8 +63,10 @@ def trees_rooted_at_outgroup():
 
 def test_masking():
     trees = trees_rooted_at_outgroup()
-    labels = []
+    # Labels: 0 = edge in MP tree, 1 = edge not in MP tree (one per node)
+    labels = [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]
     traversal_data = TraversalDataset(trees, labels, device="cpu")
+    print(traversal_data)
     tree1_masks = [False, False, True, True, False, False, False, False]
     tree2_masks = [False, False, True, False, False, True, False, False]
     excepted_masks = [tree1_masks, tree2_masks]
@@ -72,12 +74,13 @@ def test_masking():
     print(excepted_masks)
     print("Computed masks:")
     print(traversal_data.mask)
-    assert traversal_data.mask == excepted_masks
+    assert traversal_data.mask.tolist() == excepted_masks
 
 
 def test_get_mutations():
     trees = trees_rooted_at_outgroup()
-    labels = []
+    # Labels: 0 = edge in MP tree, 1 = edge not in MP tree (one per node)
+    labels = [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]
     traversal_data = TraversalDataset(trees, labels, device="cpu")
     mutations = traversal_data.mutations
     num_trees = len(trees)
@@ -108,7 +111,8 @@ def test_get_mutations():
 
 def test_get_traversal():
     trees = trees_rooted_at_outgroup()
-    labels = []
+    # Labels: 0 = edge in MP tree, 1 = edge not in MP tree (one per node)
+    labels = [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]
     traversal_data = TraversalDataset(trees, labels, device="cpu")
     traversal = traversal_data.traversal
     num_trees = len(trees)
@@ -117,14 +121,14 @@ def test_get_traversal():
     # first tree
     expected_traversal[0, 0, 0, :] = torch.tensor([4, 5, 3])
     expected_traversal[0, 0, 1, :] = torch.tensor([3, 6, 2])
-    expected_traversal[0, 1, 0, :] = torch.tensor([7, 1, 2])
-    expected_traversal[0, 1, 1, :] = torch.tensor([6, 2, 3])
+    expected_traversal[0, 1, 0, :] = torch.tensor([1, 7, 2])
+    expected_traversal[0, 1, 1, :] = torch.tensor([2, 6, 3])
 
     # 2nd tree
     expected_traversal[1, 0, 0, :] = torch.tensor([3, 4, 2])
     expected_traversal[1, 0, 1, :] = torch.tensor([6, 7, 5])
-    expected_traversal[1, 1, 0, :] = torch.tensor([5, 1, 2])
-    expected_traversal[1, 1, 1, :] = torch.tensor([2, 1, 5])
+    expected_traversal[1, 1, 0, :] = torch.tensor([1, 5, 2])
+    expected_traversal[1, 1, 1, :] = torch.tensor([1, 2, 5])
 
     print("Expected:")
     print(expected_traversal)
