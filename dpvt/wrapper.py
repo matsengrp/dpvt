@@ -4,8 +4,9 @@ import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 import lightning as L
 from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.profilers import AdvancedProfiler
-from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
+from pytorch_lightning.profilers import PyTorchProfiler
+from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, DeviceStatsMonitor
+import time
 from torch.utils.data import Dataset
 from ete3 import Tree
 from datetime import datetime
@@ -91,11 +92,30 @@ class TraversalDataset(Dataset):
     A. Labels indicate edges that are MP (0) vs non-MP (1) and mask contains
     boolean values indicating whether edges are adjacent to leaves"""
 
-    def __init__(self, trees, labels, device):
-        self.traversal, self.mutations = self.get_tensor_representation(trees)
+    def __init__(self, trees, labels, device, verbose_timing=False):
+        self.timings = {}
+
+        t0 = time.perf_counter()
+        self.traversal, self.mutations = self.get_tensor_representation(
+            trees, verbose_timing=verbose_timing
+        )
+        self.timings['get_tensor_representation'] = time.perf_counter() - t0
+
+        t0 = time.perf_counter()
         self.labels = self.pad_labels(labels)
+        self.timings['pad_labels'] = time.perf_counter() - t0
+
+        t0 = time.perf_counter()
         self.mask = self.mask_pendant_edges(trees)
+        self.timings['mask_pendant_edges'] = time.perf_counter() - t0
+
         self.device = device
+
+        if verbose_timing:
+            total = sum(self.timings.values())
+            print(f"TraversalDataset preprocessing: {total:.2f}s")
+            for step, t in self.timings.items():
+                print(f"  {step}: {t:.2f}s ({100*t/total:.1f}%)")
 
     def __len__(self):
         return len(self.labels)
@@ -112,15 +132,20 @@ class TraversalDataset(Dataset):
             mask,
         )
 
-    def get_tensor_representation(self, trees):
+    def get_tensor_representation(self, trees, verbose_timing=False):
+        timings = {}
+
         print(f"Preprocessing {len(trees)} trees into tensor representation...")
         print("  Step 1/4: Computing maximum dimensions...")
+        t0 = time.perf_counter()
         max_n_sites = max([len(tree.sequence) for tree in trees])
         max_n_nodes = max([len(list(tree.traverse())) for tree in trees])
         max_n_int_nodes = max([len(tree) - 2 for tree in trees])
+        timings['compute_dims'] = time.perf_counter() - t0
         print(f"    Max sites: {max_n_sites}, Max nodes: {max_n_nodes}, Max internal nodes: {max_n_int_nodes}")
 
         print("  Step 2/4: Allocating tensors...")
+        t0 = time.perf_counter()
         mutations = torch.full(
             (len(trees), max_n_nodes, max_n_sites, 4), -1, dtype=torch.float32, device='cpu'
         )
@@ -128,10 +153,12 @@ class TraversalDataset(Dataset):
         traversal = torch.full(
             (len(trees), 2, max_n_int_nodes, 3), -1, dtype=torch.float32, device='cpu'
         )
+        timings['allocate_tensors'] = time.perf_counter() - t0
         tensor_size_gb = (mutations.numel() + traversal.numel()) * 4 / (1024**3)
         print(f"    Allocated {tensor_size_gb:.6f} GB of tensors")
 
         print("  Step 3/4: Processing trees (this may take a while)...")
+        t0 = time.perf_counter()
         tree_index = 0
         report_interval = max(1, len(trees) // 20)  # Report every 5% progress
         # child and parent index in traversal
@@ -194,8 +221,16 @@ class TraversalDataset(Dataset):
                         except KeyError:
                             raise ValueError(f"Each node sequence must be in {STATES}")
             tree_index += 1
+        timings['process_trees'] = time.perf_counter() - t0
         print(f"    Progress: {len(trees)}/{len(trees)} trees (100.0%)")
         print("  Step 4/4: Tensor representation complete!")
+
+        if verbose_timing:
+            total = sum(timings.values())
+            print("  get_tensor_representation() breakdown:")
+            for step, t in timings.items():
+                print(f"    {step}: {t:.2f}s ({100*t/total:.1f}%)")
+
         return traversal, mutations
 
     def mask_pendant_edges(self, trees):
@@ -243,7 +278,10 @@ class Wrap:
         epochs: Number of epochs for training
         hyperparameter_path: Path to a JSON file with hyperparameters, which
             replace the default parameters in the input here
-        profiling: Boolean indicating whether to use profiling
+        profiling: Boolean indicating whether to use PyTorchProfiler for
+            detailed GPU/CPU profiling with TensorBoard integration
+        device_stats: Boolean indicating whether to add DeviceStatsMonitor
+            callback for logging GPU memory usage
         accum_grad_batches: Number of batches to accumulate gradients over
         timestamp: Timestamp for logging
         added_callbacks: List of additional callbacks for the trainer
@@ -264,6 +302,7 @@ class Wrap:
         epochs=200,
         hyperparameter_path="",
         profiling=False,
+        device_stats=False,
         accum_grad_batches=1,
         timestamp=str(todays_date),
         added_callbacks=[],
@@ -352,10 +391,25 @@ class Wrap:
             patience=5,
             mode="min",
         )
+
+        # Build callbacks list
+        callbacks = [checkpoint_callback, early_stop_callback]
+        if device_stats:
+            callbacks.append(DeviceStatsMonitor())
+        callbacks.extend(added_callbacks)
+
+        # Set up profiler
         profiler = None
         if self.profiling:
-            profiler = AdvancedProfiler(
-                dirpath="profiler_output/" + self.device, filename=self.log_path
+            profiler = PyTorchProfiler(
+                dirpath="profiler_output/" + self.device,
+                filename=self.log_path,
+                profile_memory=True,
+                with_stack=True,
+                record_shapes=True,
+                export_to_chrome=True,
+                row_limit=20,
+                sort_by_key="cuda_time_total",
             )
         self.trainer = L.Trainer(
             accelerator=self.device,
@@ -364,7 +418,7 @@ class Wrap:
             log_every_n_steps=1,
             max_epochs=self.epochs,
             # limit_train_batches=1,
-            callbacks=[checkpoint_callback, early_stop_callback] + added_callbacks,
+            callbacks=callbacks,
             profiler=profiler,
             accumulate_grad_batches=self.accum_grad_batches,
         )
@@ -463,10 +517,19 @@ class HyperWrap:
             patience=3,  # Number of epochs with no improvement after which training will be stopped
             mode="min",  # Stop training when the quantity monitored has stopped decreasing
         )
+
+        # Set up profiler
         profiler = None
         if self.profiling:
-            profiler = AdvancedProfiler(
-                dirpath="profiler_output/" + self.device, filename=self.log_path
+            profiler = PyTorchProfiler(
+                dirpath="profiler_output/" + self.device,
+                filename=self.log_path,
+                profile_memory=True,
+                with_stack=True,
+                record_shapes=True,
+                export_to_chrome=True,
+                row_limit=20,
+                sort_by_key="cuda_time_total",
             )
         self.trainer = L.Trainer(
             accelerator=self.device,
