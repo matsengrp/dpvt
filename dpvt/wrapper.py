@@ -6,7 +6,6 @@ import lightning as L
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.profilers import AdvancedProfiler
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, DeviceStatsMonitor
-import time
 from torch.utils.data import Dataset
 from ete3 import Tree
 from datetime import datetime
@@ -93,30 +92,11 @@ class TraversalDataset(Dataset):
     A. Labels indicate edges that are MP (0) vs non-MP (1) and mask contains
     boolean values indicating whether edges are adjacent to leaves"""
 
-    def __init__(self, trees, labels, device, verbose_timing=False):
-        self.timings = {}
-
-        t0 = time.perf_counter()
-        self.traversal, self.mutations = self.get_tensor_representation(
-            trees, verbose_timing=verbose_timing
-        )
-        self.timings['get_tensor_representation'] = time.perf_counter() - t0
-
-        t0 = time.perf_counter()
+    def __init__(self, trees, labels, device):
+        self.traversal, self.mutations = self.get_tensor_representation(trees)
         self.labels = self.pad_labels(labels)
-        self.timings['pad_labels'] = time.perf_counter() - t0
-
-        t0 = time.perf_counter()
         self.mask = self.mask_pendant_edges(trees)
-        self.timings['mask_pendant_edges'] = time.perf_counter() - t0
-
         self.device = device
-
-        if verbose_timing:
-            total = sum(self.timings.values())
-            print(f"TraversalDataset preprocessing: {total:.2f}s")
-            for step, t in self.timings.items():
-                print(f"  {step}: {t:.2f}s ({100*t/total:.1f}%)")
 
     def __len__(self):
         return len(self.labels)
@@ -133,20 +113,15 @@ class TraversalDataset(Dataset):
             mask,
         )
 
-    def get_tensor_representation(self, trees, verbose_timing=False):
-        timings = {}
-
+    def get_tensor_representation(self, trees):
         print(f"Preprocessing {len(trees)} trees into tensor representation...")
         print("  Step 1/4: Computing maximum dimensions...")
-        t0 = time.perf_counter()
         max_n_sites = max([len(tree.sequence) for tree in trees])
         max_n_nodes = max([len(list(tree.traverse())) for tree in trees])
         max_n_int_nodes = max([len(tree) - 2 for tree in trees])
-        timings['compute_dims'] = time.perf_counter() - t0
         print(f"    Max sites: {max_n_sites}, Max nodes: {max_n_nodes}, Max internal nodes: {max_n_int_nodes}")
 
         print("  Step 2/4: Allocating tensors...")
-        t0 = time.perf_counter()
         mutations = torch.full(
             (len(trees), max_n_nodes, max_n_sites, 4), -1, dtype=torch.float32, device='cpu'
         )
@@ -154,12 +129,10 @@ class TraversalDataset(Dataset):
         traversal = torch.full(
             (len(trees), 2, max_n_int_nodes, 3), -1, dtype=torch.float32, device='cpu'
         )
-        timings['allocate_tensors'] = time.perf_counter() - t0
         tensor_size_gb = (mutations.numel() + traversal.numel()) * 4 / (1024**3)
         print(f"    Allocated {tensor_size_gb:.6f} GB of tensors")
 
         print("  Step 3/4: Processing trees (this may take a while)...")
-        t0 = time.perf_counter()
         tree_index = 0
         report_interval = max(1, len(trees) // 20)  # Report every 5% progress
         # child and parent index in traversal
@@ -222,15 +195,8 @@ class TraversalDataset(Dataset):
                         except KeyError:
                             raise ValueError(f"Each node sequence must be in {STATES}")
             tree_index += 1
-        timings['process_trees'] = time.perf_counter() - t0
         print(f"    Progress: {len(trees)}/{len(trees)} trees (100.0%)")
         print("  Step 4/4: Tensor representation complete!")
-
-        if verbose_timing:
-            total = sum(timings.values())
-            print("  get_tensor_representation() breakdown:")
-            for step, t in timings.items():
-                print(f"    {step}: {t:.2f}s ({100*t/total:.1f}%)")
 
         return traversal, mutations
 
