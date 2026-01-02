@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 import lightning as L
 from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.profilers import PyTorchProfiler
+from pytorch_lightning.profilers import AdvancedProfiler
 from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, DeviceStatsMonitor
 import time
 from torch.utils.data import Dataset
@@ -15,6 +15,7 @@ todays_date = datetime.now().strftime("%Y-%m-%d")
 
 import optuna
 import json
+import os
 
 # DNA states
 STATES = ["A", "G", "C", "T"]
@@ -401,15 +402,13 @@ class Wrap:
         # Set up profiler
         profiler = None
         if self.profiling:
-            profiler = PyTorchProfiler(
-                dirpath="profiler_output/" + self.device,
-                filename=self.log_path,
-                profile_memory=True,
-                with_stack=True,
-                record_shapes=True,
-                export_to_chrome=True,
-                row_limit=20,
-                sort_by_key="cuda_time_total",
+            # Extract just the basename for the filename, as PyTorchProfiler
+            # combines dirpath + filename and doesn't handle absolute paths well
+            profiler_filename = os.path.basename(self.log_path)
+            profiler_dir = "profiler_output/" + self.device
+            profiler = AdvancedProfiler(
+                dirpath=profiler_dir,
+                filename=profiler_filename,
             )
         self.trainer = L.Trainer(
             accelerator=self.device,
@@ -521,15 +520,13 @@ class HyperWrap:
         # Set up profiler
         profiler = None
         if self.profiling:
-            profiler = PyTorchProfiler(
-                dirpath="profiler_output/" + self.device,
-                filename=self.log_path,
-                profile_memory=True,
-                with_stack=True,
-                record_shapes=True,
-                export_to_chrome=True,
-                row_limit=20,
-                sort_by_key="cuda_time_total",
+            # Extract just the basename for the filename, as PyTorchProfiler
+            # combines dirpath + filename and doesn't handle absolute paths well
+            profiler_filename = os.path.basename(self.log_path)
+            profiler_dir = "profiler_output/" + self.device
+            profiler = AdvancedProfiler(
+                dirpath=profiler_dir,
+                filename=profiler_filename,
             )
         self.trainer = L.Trainer(
             accelerator=self.device,
