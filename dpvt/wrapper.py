@@ -448,7 +448,7 @@ class Wrap:
             )
             # Write preprocessing timings from datasets to profiler directory
             self._write_preprocessing_timings(
-                profiler_dir, train_data, val_data, test_data
+                profiler_dir, train_data, val_data, test_data, profiler_filename
             )
 
         self.trainer = L.Trainer(
@@ -474,8 +474,19 @@ class Wrap:
         self.trainer.save_checkpoint(checkpoint)
         return result
 
-    def _write_preprocessing_timings(self, profiler_dir, train_data, val_data, test_data):
-        """Write preprocessing timing reports from datasets to the profiler directory."""
+    def _write_preprocessing_timings(
+        self, profiler_dir, train_data, val_data, test_data, profiling_filename
+    ):
+        """Write preprocessing timing reports from datasets to the profiler directory.
+
+        Args:
+            profiler_dir: Directory to write profiler output files.
+            train_data: Training dataset.
+            val_data: Validation dataset.
+            test_data: Test dataset.
+            profiling_filename: Base filename (e.g., 'TraverseNN-benchmark_train-Param0')
+                to include in output filenames for identification.
+        """
         os.makedirs(profiler_dir, exist_ok=True)
 
         datasets = [
@@ -488,7 +499,9 @@ class Wrap:
             if hasattr(dataset, 'preprocessing_timings'):
                 title = f"TraversalDataset Preprocessing Profiler Report ({name})"
                 lines = _format_timing_report(dataset.preprocessing_timings, title)
-                filepath = os.path.join(profiler_dir, f"preprocessing_{name}.txt")
+                filepath = os.path.join(
+                    profiler_dir, f"preprocessing_{name}-{profiling_filename}.txt"
+                )
                 with open(filepath, 'w') as f:
                     f.write("\n".join(lines) + "\n")
                 print(f"Preprocessing timing report written to: {filepath}")
