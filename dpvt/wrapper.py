@@ -9,6 +9,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 from torch.utils.data import Dataset
 from ete3 import Tree
 from datetime import datetime
+import numpy as np
 
 todays_date = datetime.now().strftime("%Y-%m-%d")
 
@@ -20,6 +21,14 @@ import time
 # DNA states
 STATES = ["A", "G", "C", "T"]
 STATE_TO_IDX = {"A": 0, "G": 1, "C": 2, "T": 3}
+
+# Fast lookup table for DNA base -> index conversion
+# Uses ASCII codes: A=65, G=71, C=67, T=84
+_SEQ_LOOKUP = np.zeros(256, dtype=np.int64)
+_SEQ_LOOKUP[ord('A')] = 0
+_SEQ_LOOKUP[ord('G')] = 1
+_SEQ_LOOKUP[ord('C')] = 2
+_SEQ_LOOKUP[ord('T')] = 3
 
 
 def _format_timing_report(timings, title="TraversalDataset Preprocessing Profiler Report"):
@@ -165,6 +174,7 @@ class TraversalDataset(Dataset):
         )
 
     def get_tensor_representation(self, trees):
+        """Original implementation with per-site Python loop."""
         timings = {}
 
         print(f"Preprocessing {len(trees)} trees into tensor representation...")
@@ -252,6 +262,123 @@ class TraversalDataset(Dataset):
                             ] -= 1
                         except KeyError:
                             raise ValueError(f"Each node sequence must be in {STATES}")
+            tree_index += 1
+        timings['  process_trees'] = time.perf_counter() - t0
+        print(f"    Progress: {len(trees)}/{len(trees)} trees (100.0%)")
+        print("  Step 4/4: Tensor representation complete!")
+
+        return traversal, mutations, timings
+
+    def get_tensor_representation_vectorized(self, trees):
+        """Vectorized implementation that eliminates per-site Python loop.
+
+        This is an optimized version of get_tensor_representation() that uses
+        numpy vectorization to process all sites at once per node, rather than
+        iterating through sites one-by-one. It also only touches mutation sites
+        (where parent and child differ) rather than processing all sites.
+
+        For validation, compare outputs:
+            original = dataset.get_tensor_representation(trees)
+            vectorized = dataset.get_tensor_representation_vectorized(trees)
+            assert torch.equal(original[0], vectorized[0])  # traversal
+            assert torch.equal(original[1], vectorized[1])  # mutations
+        """
+        timings = {}
+
+        # Validate sequences contain only valid bases
+        valid_bases = set('AGCT')
+        for tree in trees:
+            for node in tree.traverse():
+                invalid = set(node.sequence) - valid_bases
+                if invalid:
+                    raise ValueError(f"Each node sequence must be in {STATES}, found: {invalid}")
+
+        print(f"Preprocessing {len(trees)} trees into tensor representation (vectorized)...")
+        print("  Step 1/4: Computing maximum dimensions...")
+        t0 = time.perf_counter()
+        max_n_sites = max([len(tree.sequence) for tree in trees])
+        max_n_nodes = max([len(list(tree.traverse())) for tree in trees])
+        max_n_int_nodes = max([len(tree) - 2 for tree in trees])
+        timings['  compute_dimensions'] = time.perf_counter() - t0
+        print(f"    Max sites: {max_n_sites}, Max nodes: {max_n_nodes}, Max internal nodes: {max_n_int_nodes}")
+
+        print("  Step 2/4: Allocating tensors...")
+        t0 = time.perf_counter()
+        mutations = torch.full(
+            (len(trees), max_n_nodes, max_n_sites, 4), -1, dtype=torch.float32, device='cpu'
+        )
+        # from actual 0 entries representing no mutation
+        traversal = torch.full(
+            (len(trees), 2, max_n_int_nodes, 3), -1, dtype=torch.float32, device='cpu'
+        )
+        timings['  allocate_tensors'] = time.perf_counter() - t0
+        tensor_size_gb = (mutations.numel() + traversal.numel()) * 4 / (1024**3)
+        print(f"    Allocated {tensor_size_gb:.6f} GB of tensors")
+
+        print("  Step 3/4: Processing trees (vectorized)...")
+        t0 = time.perf_counter()
+        tree_index = 0
+        report_interval = max(1, len(trees) // 20)  # Report every 5% progress
+        # child and parent index in traversal
+        for tree in trees:
+            if tree_index % report_interval == 0:
+                print(f"    Progress: {tree_index}/{len(trees)} trees ({100*tree_index/len(trees):.1f}%)")
+            node_index_dict = {
+                node: index
+                for (node, index) in zip(
+                    tree.traverse("preorder"), range(len(list(tree.traverse())))
+                )
+            }  # save index for every node (preorder) to easily find it in traversals
+            node_in_tensor_index = 0
+            for node in tree.traverse("postorder"):
+                if not (node.is_leaf() or node.is_root() or node.up.is_root()):
+                    children = node.get_children()
+                    traversal[tree_index, 0, node_in_tensor_index, :] = torch.tensor(
+                        [
+                            node_index_dict[children[0]],
+                            node_index_dict[children[1]],
+                            node_index_dict[node],
+                        ]
+                    )
+                    node_in_tensor_index += 1
+
+            node_in_traversal_index = 0
+            n_sites = len(tree.sequence)
+            # downward traversal to assign mutations and traversal
+            for node in tree.traverse("preorder"):
+                # fill downward traversal (preorder) entries
+                if not (node.is_leaf() or node.is_root() or node.up.is_root()):
+                    traversal[tree_index, 1, node_in_traversal_index, :] = torch.tensor(
+                        [
+                            node_index_dict[node.up],
+                            node_index_dict[node.get_sisters()[0]],
+                            node_index_dict[node],
+                        ]
+                    )
+                    node_in_traversal_index += 1
+
+                # Vectorized mutation encoding (replaces per-site loop)
+                node_idx = node_index_dict[node]
+
+                # Initialize all sites to 0 at once
+                mutations[tree_index, node_idx, :n_sites, :] = 0.0
+
+                if node.up is not None:  # non-root node
+                    # Convert sequences to index arrays using numpy lookup (no Python loop)
+                    node_bytes = np.frombuffer(node.sequence.encode('ascii'), dtype=np.uint8)
+                    parent_bytes = np.frombuffer(node.up.sequence.encode('ascii'), dtype=np.uint8)
+                    node_seq_idx = _SEQ_LOOKUP[node_bytes]
+                    parent_seq_idx = _SEQ_LOOKUP[parent_bytes]
+
+                    # Find mutation sites (where sequences differ)
+                    diff_mask = node_seq_idx != parent_seq_idx
+
+                    if np.any(diff_mask):
+                        mut_sites = np.where(diff_mask)[0]
+                        # Set +1 for mutation TO (node's base)
+                        mutations[tree_index, node_idx, mut_sites, node_seq_idx[diff_mask]] = 1.0
+                        # Set -1 for mutation FROM (parent's base)
+                        mutations[tree_index, node_idx, mut_sites, parent_seq_idx[diff_mask]] = -1.0
             tree_index += 1
         timings['  process_trees'] = time.perf_counter() - t0
         print(f"    Progress: {len(trees)}/{len(trees)} trees (100.0%)")

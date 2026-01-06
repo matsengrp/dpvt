@@ -135,3 +135,67 @@ def test_get_traversal():
     print("Computed:")
     print(traversal)
     assert torch.equal(expected_traversal, traversal)
+
+
+def test_vectorized_matches_original():
+    """Test that vectorized implementation produces identical output to original."""
+    trees = trees_rooted_at_outgroup()
+    labels = [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]
+
+    # Create a dataset instance to access both methods
+    traversal_data = TraversalDataset(trees, labels, device="cpu")
+
+    # Get outputs from both implementations
+    # Note: We need fresh trees since traversal modifies state
+    trees_orig = trees_rooted_at_outgroup()
+    trees_vec = trees_rooted_at_outgroup()
+
+    orig_traversal, orig_mutations, _ = traversal_data.get_tensor_representation(trees_orig)
+    vec_traversal, vec_mutations, _ = traversal_data.get_tensor_representation_vectorized(trees_vec)
+
+    print("Original mutations shape:", orig_mutations.shape)
+    print("Vectorized mutations shape:", vec_mutations.shape)
+
+    # Compare traversal tensors
+    assert torch.equal(orig_traversal, vec_traversal), "Traversal tensors differ!"
+
+    # Compare mutation tensors
+    assert torch.equal(orig_mutations, vec_mutations), "Mutation tensors differ!"
+
+    print("Vectorized implementation matches original!")
+
+
+def test_vectorized_get_mutations():
+    """Test vectorized mutation encoding against expected values."""
+    trees = trees_rooted_at_outgroup()
+    labels = [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]
+
+    traversal_data = TraversalDataset(trees, labels, device="cpu")
+    _, mutations, _ = traversal_data.get_tensor_representation_vectorized(trees)
+
+    num_trees = len(trees)
+    num_nodes = len(list(trees[0].traverse()))
+    num_sites = len(trees[0].sequence)
+    expected_mutations = torch.zeros(num_trees, num_nodes, num_sites, 4)
+
+    # first tree
+    expected_mutations[0, 2, 0, 1] = -1
+    expected_mutations[0, 2, 0, 2] = 1
+    expected_mutations[0, 3, 1, 0] = 1
+    expected_mutations[0, 3, 1, 1] = -1
+    expected_mutations[0, 4, 0, 0] = 1
+    expected_mutations[0, 4, 0, 2] = -1
+    expected_mutations[0, 7, 0, 1] = -1
+    expected_mutations[0, 7, 0, 3] = 1
+
+    # 2nd tree
+    expected_mutations[1, 2, 1, 0] = 1
+    expected_mutations[1, 2, 1, 1] = -1
+    expected_mutations[1, 3, 0, 0] = 1
+    expected_mutations[1, 3, 0, 2] = -1
+    expected_mutations[1, 5, 0, 1] = 1
+    expected_mutations[1, 5, 0, 2] = -1
+    expected_mutations[1, 6, 0, 1] = -1
+    expected_mutations[1, 6, 0, 3] = 1
+
+    assert torch.equal(expected_mutations, mutations)
