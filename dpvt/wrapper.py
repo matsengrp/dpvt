@@ -14,10 +14,48 @@ todays_date = datetime.now().strftime("%Y-%m-%d")
 
 import optuna
 import json
+import os
+import time
 
 # DNA states
 STATES = ["A", "G", "C", "T"]
 STATE_TO_IDX = {"A": 0, "G": 1, "C": 2, "T": 3}
+
+
+def _format_timing_report(timings, title="TraversalDataset Preprocessing Profiler Report"):
+    """Format a profiler-style timing report as a list of lines.
+
+    Args:
+        timings: Dictionary of timing measurements
+        title: Title for the report
+
+    Returns:
+        List of formatted lines
+    """
+    total = sum(v for k, v in timings.items() if not k.startswith('  '))
+
+    lines = []
+    lines.append("-" * 80)
+    lines.append(title)
+    lines.append("-" * 80)
+    lines.append(f"{'Action':<45} {'Total time (s)':>15} {'% of total':>15}")
+    lines.append("-" * 80)
+
+    for key in ['get_tensor_representation', '  compute_dimensions',
+                '  allocate_tensors', '  process_trees',
+                'pad_labels', 'mask_pendant_edges']:
+        if key in timings:
+            t = timings[key]
+            pct = 100 * t / total if total > 0 else 0
+            lines.append(f"{key:<45} {t:>15.3f} {pct:>14.1f}%")
+
+    lines.append("-" * 80)
+    lines.append(f"{'Total':<45} {total:>15.3f}")
+    lines.append("-" * 80)
+
+    return lines
+
+
 n_states = len(STATES)
 
 
@@ -91,11 +129,25 @@ class TraversalDataset(Dataset):
     A. Labels indicate edges that are MP (0) vs non-MP (1) and mask contains
     boolean values indicating whether edges are adjacent to leaves"""
 
-    def __init__(self, trees, labels, device):
-        self.traversal, self.mutations = self.get_tensor_representation(trees)
+    def __init__(self, trees, labels, device, profiler_dir=None):
+        timings = {}
+
+        t0 = time.perf_counter()
+        self.traversal, self.mutations, tensor_timings = self.get_tensor_representation(trees)
+        timings['get_tensor_representation'] = time.perf_counter() - t0
+        timings.update(tensor_timings)
+
+        t0 = time.perf_counter()
         self.labels = self.pad_labels(labels)
+        timings['pad_labels'] = time.perf_counter() - t0
+
+        t0 = time.perf_counter()
         self.mask = self.mask_pendant_edges(trees)
+        timings['mask_pendant_edges'] = time.perf_counter() - t0
+
         self.device = device
+        self.preprocessing_timings = timings
+        self._print_timing_report(timings, profiler_dir)
 
     def __len__(self):
         return len(self.labels)
@@ -113,14 +165,19 @@ class TraversalDataset(Dataset):
         )
 
     def get_tensor_representation(self, trees):
+        timings = {}
+
         print(f"Preprocessing {len(trees)} trees into tensor representation...")
         print("  Step 1/4: Computing maximum dimensions...")
+        t0 = time.perf_counter()
         max_n_sites = max([len(tree.sequence) for tree in trees])
         max_n_nodes = max([len(list(tree.traverse())) for tree in trees])
         max_n_int_nodes = max([len(tree) - 2 for tree in trees])
+        timings['  compute_dimensions'] = time.perf_counter() - t0
         print(f"    Max sites: {max_n_sites}, Max nodes: {max_n_nodes}, Max internal nodes: {max_n_int_nodes}")
 
         print("  Step 2/4: Allocating tensors...")
+        t0 = time.perf_counter()
         mutations = torch.full(
             (len(trees), max_n_nodes, max_n_sites, 4), -1, dtype=torch.float32, device='cpu'
         )
@@ -128,10 +185,12 @@ class TraversalDataset(Dataset):
         traversal = torch.full(
             (len(trees), 2, max_n_int_nodes, 3), -1, dtype=torch.float32, device='cpu'
         )
+        timings['  allocate_tensors'] = time.perf_counter() - t0
         tensor_size_gb = (mutations.numel() + traversal.numel()) * 4 / (1024**3)
         print(f"    Allocated {tensor_size_gb:.6f} GB of tensors")
 
         print("  Step 3/4: Processing trees (this may take a while)...")
+        t0 = time.perf_counter()
         tree_index = 0
         report_interval = max(1, len(trees) // 20)  # Report every 5% progress
         # child and parent index in traversal
@@ -194,9 +253,11 @@ class TraversalDataset(Dataset):
                         except KeyError:
                             raise ValueError(f"Each node sequence must be in {STATES}")
             tree_index += 1
+        timings['  process_trees'] = time.perf_counter() - t0
         print(f"    Progress: {len(trees)}/{len(trees)} trees (100.0%)")
         print("  Step 4/4: Tensor representation complete!")
-        return traversal, mutations
+
+        return traversal, mutations, timings
 
     def mask_pendant_edges(self, trees):
         # Create list of tensors, each containing the mask for one tree
@@ -225,6 +286,23 @@ class TraversalDataset(Dataset):
         print("  Label padding complete!")
         return result
 
+    def _print_timing_report(self, timings, profiler_dir=None):
+        """Print and optionally save a profiler-style timing report for dataset preprocessing.
+
+        Args:
+            timings: Dictionary of timing measurements
+            profiler_dir: If provided, writes the report to this directory
+        """
+        lines = _format_timing_report(timings)
+        print("\n" + "\n".join(lines) + "\n")
+
+        if profiler_dir:
+            os.makedirs(profiler_dir, exist_ok=True)
+            filepath = os.path.join(profiler_dir, "preprocessing_profile.txt")
+            with open(filepath, 'w') as f:
+                f.write("\n".join(lines) + "\n")
+            print(f"Timing report written to: {filepath}")
+
 
 class Wrap:
     """
@@ -243,7 +321,8 @@ class Wrap:
         epochs: Number of epochs for training
         hyperparameter_path: Path to a JSON file with hyperparameters, which
             replace the default parameters in the input here
-        profiling: Boolean indicating whether to use profiling
+        profiling: Boolean indicating whether to use AdvancedProfiler for
+            CPU profiling
         accum_grad_batches: Number of batches to accumulate gradients over
         timestamp: Timestamp for logging
         added_callbacks: List of additional callbacks for the trainer
@@ -352,11 +431,26 @@ class Wrap:
             patience=5,
             mode="min",
         )
+
+        # Build callbacks list
+        callbacks = [checkpoint_callback, early_stop_callback] + added_callbacks
+
+        # Set up profiler
         profiler = None
         if self.profiling:
+            # Extract just the basename for the filename, as AdvancedProfiler
+            # combines dirpath + filename and doesn't handle absolute paths well
+            profiler_filename = os.path.basename(self.log_path)
+            profiler_dir = "profiler_output/" + self.device
             profiler = AdvancedProfiler(
-                dirpath="profiler_output/" + self.device, filename=self.log_path
+                dirpath=profiler_dir,
+                filename=profiler_filename,
             )
+            # Write preprocessing timings from datasets to profiler directory
+            self._write_preprocessing_timings(
+                profiler_dir, train_data, val_data, test_data, profiler_filename
+            )
+
         self.trainer = L.Trainer(
             accelerator=self.device,
             devices=1,
@@ -364,7 +458,7 @@ class Wrap:
             log_every_n_steps=1,
             max_epochs=self.epochs,
             # limit_train_batches=1,
-            callbacks=[checkpoint_callback, early_stop_callback] + added_callbacks,
+            callbacks=callbacks,
             profiler=profiler,
             accumulate_grad_batches=self.accum_grad_batches,
         )
@@ -379,6 +473,38 @@ class Wrap:
         result = self.trainer.test(self.model, self.test_loader, trained_model_ckpt)
         self.trainer.save_checkpoint(checkpoint)
         return result
+
+    def _write_preprocessing_timings(
+        self, profiler_dir, train_data, val_data, test_data, profiling_filename
+    ):
+        """Write preprocessing timing reports from datasets to the profiler directory.
+
+        Args:
+            profiler_dir: Directory to write profiler output files.
+            train_data: Training dataset.
+            val_data: Validation dataset.
+            test_data: Test dataset.
+            profiling_filename: Base filename (e.g., 'TraverseNN-benchmark_train-Param0')
+                to include in output filenames for identification.
+        """
+        os.makedirs(profiler_dir, exist_ok=True)
+
+        datasets = [
+            ('train', train_data),
+            ('val', val_data),
+            ('test', test_data),
+        ]
+
+        for name, dataset in datasets:
+            if hasattr(dataset, 'preprocessing_timings'):
+                title = f"TraversalDataset Preprocessing Profiler Report ({name})"
+                lines = _format_timing_report(dataset.preprocessing_timings, title)
+                filepath = os.path.join(
+                    profiler_dir, f"preprocessing_{name}-{profiling_filename}.txt"
+                )
+                with open(filepath, 'w') as f:
+                    f.write("\n".join(lines) + "\n")
+                print(f"Preprocessing timing report written to: {filepath}")
 
 
 class HyperWrap:
@@ -463,10 +589,17 @@ class HyperWrap:
             patience=3,  # Number of epochs with no improvement after which training will be stopped
             mode="min",  # Stop training when the quantity monitored has stopped decreasing
         )
+
+        # Set up profiler
         profiler = None
         if self.profiling:
+            # Extract just the basename for the filename, as AdvancedProfiler
+            # combines dirpath + filename and doesn't handle absolute paths well
+            profiler_filename = os.path.basename(self.log_path)
+            profiler_dir = "profiler_output/" + self.device
             profiler = AdvancedProfiler(
-                dirpath="profiler_output/" + self.device, filename=self.log_path
+                dirpath=profiler_dir,
+                filename=profiler_filename,
             )
         self.trainer = L.Trainer(
             accelerator=self.device,
