@@ -562,20 +562,20 @@ class Wrap:
         # Build callbacks list
         callbacks = [checkpoint_callback, early_stop_callback] + added_callbacks
 
-        # Set up profiler
+        # Set up profiler directory and write preprocessing timings (always)
+        profiler_filename = os.path.basename(self.log_path)
+        profiler_dir = "profiler_output/" + self.device
+        # Always write preprocessing timings (lightweight, no overhead)
+        self._write_preprocessing_timings(
+            profiler_dir, train_data, val_data, test_data, profiler_filename
+        )
+
+        # Set up AdvancedProfiler only when profiling is enabled (this adds overhead)
         profiler = None
         if self.profiling:
-            # Extract just the basename for the filename, as AdvancedProfiler
-            # combines dirpath + filename and doesn't handle absolute paths well
-            profiler_filename = os.path.basename(self.log_path)
-            profiler_dir = "profiler_output/" + self.device
             profiler = AdvancedProfiler(
                 dirpath=profiler_dir,
                 filename=profiler_filename,
-            )
-            # Write preprocessing timings from datasets to profiler directory
-            self._write_preprocessing_timings(
-                profiler_dir, train_data, val_data, test_data, profiler_filename
             )
 
         self.trainer = L.Trainer(
