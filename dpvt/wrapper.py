@@ -16,6 +16,7 @@ todays_date = datetime.now().strftime("%Y-%m-%d")
 import optuna
 import json
 import os
+from pathlib import Path
 import time
 
 # DNA states
@@ -562,17 +563,21 @@ class Wrap:
         # Build callbacks list
         callbacks = [checkpoint_callback, early_stop_callback] + added_callbacks
 
-        # Set up profiler directory and write preprocessing timings (always)
+        # Derive run_dir from log_path (go up 3 directories)
+        # log_path structure: {run_dir}/{log_name}/{step_name}/{model_str}
+        run_dir = str(Path(self.log_path).parents[2])
         profiler_filename = os.path.basename(self.log_path)
-        profiler_dir = "profiler_output/" + self.device
+
         # Always write preprocessing timings (lightweight, no overhead)
+        preproc_dir = os.path.join(run_dir, "preprocessing_times")
         self._write_preprocessing_timings(
-            profiler_dir, train_data, val_data, test_data, profiler_filename
+            preproc_dir, train_data, val_data, test_data, profiler_filename
         )
 
         # Set up AdvancedProfiler only when profiling is enabled (this adds overhead)
         profiler = None
         if self.profiling:
+            profiler_dir = os.path.join(run_dir, "profiler_output")
             profiler = AdvancedProfiler(
                 dirpath=profiler_dir,
                 filename=profiler_filename,
@@ -720,10 +725,10 @@ class HyperWrap:
         # Set up profiler
         profiler = None
         if self.profiling:
-            # Extract just the basename for the filename, as AdvancedProfiler
-            # combines dirpath + filename and doesn't handle absolute paths well
+            # Derive run_dir from log_path (go up 3 directories)
+            run_dir = str(Path(self.log_path).parents[2])
             profiler_filename = os.path.basename(self.log_path)
-            profiler_dir = "profiler_output/" + self.device
+            profiler_dir = os.path.join(run_dir, "profiler_output")
             profiler = AdvancedProfiler(
                 dirpath=profiler_dir,
                 filename=profiler_filename,
