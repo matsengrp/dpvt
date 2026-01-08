@@ -26,13 +26,15 @@ STATE_TO_IDX = {"A": 0, "G": 1, "C": 2, "T": 3}
 # Fast lookup table for DNA base -> index conversion
 # Uses ASCII codes: A=65, G=71, C=67, T=84
 _SEQ_LOOKUP = np.zeros(256, dtype=np.int64)
-_SEQ_LOOKUP[ord('A')] = 0
-_SEQ_LOOKUP[ord('G')] = 1
-_SEQ_LOOKUP[ord('C')] = 2
-_SEQ_LOOKUP[ord('T')] = 3
+_SEQ_LOOKUP[ord("A")] = 0
+_SEQ_LOOKUP[ord("G")] = 1
+_SEQ_LOOKUP[ord("C")] = 2
+_SEQ_LOOKUP[ord("T")] = 3
 
 
-def _format_timing_report(timings, title="TraversalDataset Preprocessing Profiler Report"):
+def _format_timing_report(
+    timings, title="TraversalDataset Preprocessing Profiler Report"
+):
     """Format a profiler-style timing report as a list of lines.
 
     Args:
@@ -42,7 +44,7 @@ def _format_timing_report(timings, title="TraversalDataset Preprocessing Profile
     Returns:
         List of formatted lines
     """
-    total = sum(v for k, v in timings.items() if not k.startswith('  '))
+    total = sum(v for k, v in timings.items() if not k.startswith("  "))
 
     lines = []
     lines.append("-" * 80)
@@ -51,9 +53,14 @@ def _format_timing_report(timings, title="TraversalDataset Preprocessing Profile
     lines.append(f"{'Action':<45} {'Total time (s)':>15} {'% of total':>15}")
     lines.append("-" * 80)
 
-    for key in ['get_tensor_representation', '  compute_dimensions',
-                '  allocate_tensors', '  process_trees',
-                'pad_labels', 'mask_pendant_edges']:
+    for key in [
+        "get_tensor_representation",
+        "  compute_dimensions",
+        "  allocate_tensors",
+        "  process_trees",
+        "pad_labels",
+        "mask_pendant_edges",
+    ]:
         if key in timings:
             t = timings[key]
             pct = 100 * t / total if total > 0 else 0
@@ -120,11 +127,13 @@ class TreeDataset(Dataset):
         # dtype: if specified, the tensor will be created with this dtype
         # padding_value: value to use for padding (default: 0)
         max_length = max(len(item) for item in list)
-        padded_lists = [item + [padding_value] * (max_length - len(item)) for item in list]
+        padded_lists = [
+            item + [padding_value] * (max_length - len(item)) for item in list
+        ]
         if dtype is not None:
-            list_tensor = torch.tensor(padded_lists, dtype=dtype, device='cpu')
+            list_tensor = torch.tensor(padded_lists, dtype=dtype, device="cpu")
         else:
-            list_tensor = torch.tensor(padded_lists, device='cpu')
+            list_tensor = torch.tensor(padded_lists, device="cpu")
         return list_tensor
 
 
@@ -143,17 +152,19 @@ class TraversalDataset(Dataset):
         timings = {}
 
         t0 = time.perf_counter()
-        self.traversal, self.mutations, tensor_timings = self.get_tensor_representation(trees)
-        timings['get_tensor_representation'] = time.perf_counter() - t0
+        self.traversal, self.mutations, tensor_timings = self.get_tensor_representation(
+            trees
+        )
+        timings["get_tensor_representation"] = time.perf_counter() - t0
         timings.update(tensor_timings)
 
         t0 = time.perf_counter()
         self.labels = self.pad_labels(labels)
-        timings['pad_labels'] = time.perf_counter() - t0
+        timings["pad_labels"] = time.perf_counter() - t0
 
         t0 = time.perf_counter()
         self.mask = self.mask_pendant_edges(trees)
-        timings['mask_pendant_edges'] = time.perf_counter() - t0
+        timings["mask_pendant_edges"] = time.perf_counter() - t0
 
         self.device = device
         self.preprocessing_timings = timings
@@ -191,32 +202,41 @@ class TraversalDataset(Dataset):
         timings = {}
 
         # Validate sequences contain only valid bases
-        valid_bases = set('AGCT')
+        valid_bases = set("AGCT")
         for tree in trees:
             for node in tree.traverse():
                 invalid = set(node.sequence) - valid_bases
                 if invalid:
-                    raise ValueError(f"Each node sequence must be in {STATES}, found: {invalid}")
+                    raise ValueError(
+                        f"Each node sequence must be in {STATES}, found: {invalid}"
+                    )
 
-        print(f"Preprocessing {len(trees)} trees into tensor representation (vectorized)...")
+        print(
+            f"Preprocessing {len(trees)} trees into tensor representation (vectorized)..."
+        )
         print("  Step 1/4: Computing maximum dimensions...")
         t0 = time.perf_counter()
         max_n_sites = max([len(tree.sequence) for tree in trees])
         max_n_nodes = max([len(list(tree.traverse())) for tree in trees])
         max_n_int_nodes = max([len(tree) - 2 for tree in trees])
-        timings['  compute_dimensions'] = time.perf_counter() - t0
-        print(f"    Max sites: {max_n_sites}, Max nodes: {max_n_nodes}, Max internal nodes: {max_n_int_nodes}")
+        timings["  compute_dimensions"] = time.perf_counter() - t0
+        print(
+            f"    Max sites: {max_n_sites}, Max nodes: {max_n_nodes}, Max internal nodes: {max_n_int_nodes}"
+        )
 
         print("  Step 2/4: Allocating tensors...")
         t0 = time.perf_counter()
         mutations = torch.full(
-            (len(trees), max_n_nodes, max_n_sites, 4), -1, dtype=torch.float32, device='cpu'
+            (len(trees), max_n_nodes, max_n_sites, 4),
+            -1,
+            dtype=torch.float32,
+            device="cpu",
         )
         # from actual 0 entries representing no mutation
         traversal = torch.full(
-            (len(trees), 2, max_n_int_nodes, 3), -1, dtype=torch.float32, device='cpu'
+            (len(trees), 2, max_n_int_nodes, 3), -1, dtype=torch.float32, device="cpu"
         )
-        timings['  allocate_tensors'] = time.perf_counter() - t0
+        timings["  allocate_tensors"] = time.perf_counter() - t0
         tensor_size_gb = (mutations.numel() + traversal.numel()) * 4 / (1024**3)
         print(f"    Allocated {tensor_size_gb:.6f} GB of tensors")
 
@@ -227,7 +247,9 @@ class TraversalDataset(Dataset):
         # child and parent index in traversal
         for tree in trees:
             if tree_index % report_interval == 0:
-                print(f"    Progress: {tree_index}/{len(trees)} trees ({100*tree_index/len(trees):.1f}%)")
+                print(
+                    f"    Progress: {tree_index}/{len(trees)} trees ({100*tree_index/len(trees):.1f}%)"
+                )
             node_index_dict = {
                 node: index
                 for (node, index) in zip(
@@ -270,8 +292,12 @@ class TraversalDataset(Dataset):
 
                 if node.up is not None:  # non-root node
                     # Convert sequences to index arrays using numpy lookup (no Python loop)
-                    node_bytes = np.frombuffer(node.sequence.encode('ascii'), dtype=np.uint8)
-                    parent_bytes = np.frombuffer(node.up.sequence.encode('ascii'), dtype=np.uint8)
+                    node_bytes = np.frombuffer(
+                        node.sequence.encode("ascii"), dtype=np.uint8
+                    )
+                    parent_bytes = np.frombuffer(
+                        node.up.sequence.encode("ascii"), dtype=np.uint8
+                    )
                     node_seq_idx = _SEQ_LOOKUP[node_bytes]
                     parent_seq_idx = _SEQ_LOOKUP[parent_bytes]
 
@@ -281,11 +307,15 @@ class TraversalDataset(Dataset):
                     if np.any(diff_mask):
                         mut_sites = np.where(diff_mask)[0]
                         # Set +1 for mutation TO (node's base)
-                        mutations[tree_index, node_idx, mut_sites, node_seq_idx[diff_mask]] = 1.0
+                        mutations[
+                            tree_index, node_idx, mut_sites, node_seq_idx[diff_mask]
+                        ] = 1.0
                         # Set -1 for mutation FROM (parent's base)
-                        mutations[tree_index, node_idx, mut_sites, parent_seq_idx[diff_mask]] = -1.0
+                        mutations[
+                            tree_index, node_idx, mut_sites, parent_seq_idx[diff_mask]
+                        ] = -1.0
             tree_index += 1
-        timings['  process_trees'] = time.perf_counter() - t0
+        timings["  process_trees"] = time.perf_counter() - t0
         print(f"    Progress: {len(trees)}/{len(trees)} trees (100.0%)")
         print("  Step 4/4: Tensor representation complete!")
 
@@ -301,7 +331,7 @@ class TraversalDataset(Dataset):
                     for node in tree.traverse("preorder")
                 ],
                 dtype=torch.bool,
-                device='cpu',
+                device="cpu",
             )
             for tree in trees
         ]
@@ -313,7 +343,9 @@ class TraversalDataset(Dataset):
 
     def pad_labels(self, labels):
         print(f"Padding labels for {len(labels)} trees...")
-        label_tensors = [torch.tensor(label, dtype=torch.float32, device='cpu') for label in labels]
+        label_tensors = [
+            torch.tensor(label, dtype=torch.float32, device="cpu") for label in labels
+        ]
         result = pad_sequence(label_tensors, batch_first=True, padding_value=0)
         print("  Label padding complete!")
         return result
@@ -331,7 +363,7 @@ class TraversalDataset(Dataset):
         if profiler_dir:
             os.makedirs(profiler_dir, exist_ok=True)
             filepath = os.path.join(profiler_dir, "preprocessing_profile.txt")
-            with open(filepath, 'w') as f:
+            with open(filepath, "w") as f:
                 f.write("\n".join(lines) + "\n")
             print(f"Timing report written to: {filepath}")
 
@@ -526,19 +558,19 @@ class Wrap:
         os.makedirs(profiler_dir, exist_ok=True)
 
         datasets = [
-            ('train', train_data),
-            ('val', val_data),
-            ('test', test_data),
+            ("train", train_data),
+            ("val", val_data),
+            ("test", test_data),
         ]
 
         for name, dataset in datasets:
-            if hasattr(dataset, 'preprocessing_timings'):
+            if hasattr(dataset, "preprocessing_timings"):
                 title = f"TraversalDataset Preprocessing Profiler Report ({name})"
                 lines = _format_timing_report(dataset.preprocessing_timings, title)
                 filepath = os.path.join(
                     profiler_dir, f"preprocessing_{name}-{profiling_filename}.txt"
                 )
-                with open(filepath, 'w') as f:
+                with open(filepath, "w") as f:
                     f.write("\n".join(lines) + "\n")
                 print(f"Preprocessing timing report written to: {filepath}")
 
