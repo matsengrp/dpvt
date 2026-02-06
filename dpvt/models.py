@@ -134,7 +134,9 @@ class TraverseNN(L.LightningModule):
         mp_edge_predictions = prob_predictions[labels < 0.5]
         non_mp_edge_predictions = prob_predictions[labels >= 0.5]
         self.log("mp_edge_pred_avg", torch.mean(mp_edge_predictions), prog_bar=True)
-        self.log("non_mp_edge_pred_avg", torch.mean(non_mp_edge_predictions), prog_bar=True)
+        self.log(
+            "non_mp_edge_pred_avg", torch.mean(non_mp_edge_predictions), prog_bar=True
+        )
         loss = self.masked_bce_loss(pred, labels, mask)
         self.log("train_loss", loss.item(), on_epoch=True, batch_size=len(labels))
         return loss
@@ -143,7 +145,11 @@ class TraverseNN(L.LightningModule):
         pred, labels, mask = self._process_batch(val_batch)
         loss = self.masked_bce_loss(pred, labels, mask)
         self.log(
-            "val_loss", loss.item(), on_epoch=True, prog_bar=True, batch_size=len(labels)
+            "val_loss",
+            loss.item(),
+            on_epoch=True,
+            prog_bar=True,
+            batch_size=len(labels),
         )
         # Return the batch loss so it can be accumulated later
         return loss
@@ -639,8 +645,10 @@ class BaselineReversion(L.LightningModule):
     """
     Baseline model we compare our deep learning models to. This model detects
     whether there is a reversion at any site on an edge and if so, labels it as
-    non-MP (computed in get_reversion_labels_from_tree). This model requires the
-    input to be in the format of a TreeDataset.
+    non-MP (computed in get_reversion_labels_from_tree). A reversion is detected
+    when a site returns to any previously-seen state along the root-to-node path,
+    including through multiple intermediate mutations (e.g. A->C->G->A). This
+    model requires the input to be in the format of a TreeDataset.
     """
 
     def __init__(self):
@@ -657,14 +665,21 @@ class BaselineReversion(L.LightningModule):
     def get_reversion_labels_from_tree(self, tree):
         """
         Take in a tree object and create a list with labels 0/1 containing for
-        each node whether there is a reversion on the edge above the node
+        each node whether there is a reversion on the edge above the node.
+        A reversion is detected when a mutation changes a site to a state that
+        has already been seen earlier on the path from root to that node.
         """
         n_sites = len(tree.sequence)
-        # Dictionary to keep track of all mutations between root and each node at each site
-        node_mutation_history = {
-            node: {site_idx: [] for site_idx in range(n_sites)}
+        # Track the set of states seen at each site along the root-to-node path
+        node_state_history = {
+            node: {site_idx: set() for site_idx in range(n_sites)}
             for node in tree.traverse()
         }
+
+        # Initialise root: record the root's state at each site
+        root = tree.get_tree_root()
+        for site_idx in range(n_sites):
+            node_state_history[root][site_idx].add(root.sequence[site_idx])
 
         # Result tensor storing reversion status for each node
         reversion_labels = torch.zeros(len(list(tree.traverse())), dtype=torch.float32)
@@ -681,32 +696,20 @@ class BaselineReversion(L.LightningModule):
             parent = node.up
             # For each site, track mutations
             for site_idx in range(n_sites):
-                # Copy parent's mutation history
-                node_mutation_history[node][site_idx] = node_mutation_history[parent][
+                # Copy parent's state history
+                node_state_history[node][site_idx] = node_state_history[parent][
                     site_idx
                 ].copy()
 
-                # Add current mutation if it exists
                 n_seq = node.sequence[site_idx]
                 p_seq = parent.sequence[site_idx]
 
                 if n_seq != p_seq:
-                    # Create mutation vector
-                    mut_vec = [0, 0, 0, 0]
-                    mut_vec[STATE_TO_IDX[n_seq]] += 1
-                    mut_vec[STATE_TO_IDX[p_seq]] -= 1
-
-                    # Check if this is a reversion of any previous mutation
-                    for prev_mutation in node_mutation_history[node][site_idx]:
-                        if (
-                            prev_mutation[STATE_TO_IDX[p_seq]] == 1
-                            and prev_mutation[STATE_TO_IDX[n_seq]] == -1
-                        ):
-                            # Found a reversion!
-                            reversion_labels[node_to_idx[node]] = 1
-                            break
-                    # Add this mutation to history
-                    node_mutation_history[node][site_idx].append(mut_vec)
+                    # Check if the new state was seen before on this path
+                    if n_seq in node_state_history[node][site_idx]:
+                        reversion_labels[node_to_idx[node]] = 1
+                    # Record the new state
+                    node_state_history[node][site_idx].add(n_seq)
 
         return reversion_labels
 
