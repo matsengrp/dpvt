@@ -30,24 +30,32 @@ class TestBaselineReversion:
     def test_no_reversion(self):
         """A path with no repeated states: A->C->G."""
         tree = make_tree(
-            "(((l1,l2)n2,l3)n1)root;",
-            {"root": "A", "n1": "C", "n2": "G", "l1": "G", "l2": "G", "l3": "G"},
+            "((((l1,l2)n3,l3)n2,l4)n1)root;",
+            {
+                "root": "A", "n1": "C", "n2": "G", "n3": "G",
+                "l1": "G", "l2": "G", "l3": "G", "l4": "C",
+            },
         )
         labels = self.model.get_reversion_labels_from_tree(tree)
         internal = get_internal_node_labels(tree, labels)
         assert internal["n1"] == 0.0  # A->C, no reversion
         assert internal["n2"] == 0.0  # C->G, no reversion
+        assert internal["n3"] == 0.0  # G->G, no mutation
 
     def test_simple_reversion(self):
         """A->C->A: the C->A directly reverses A->C."""
         tree = make_tree(
-            "(((l1,l2)n2,l3)n1)root;",
-            {"root": "A", "n1": "C", "n2": "A", "l1": "A", "l2": "A", "l3": "A"},
+            "((((l1,l2)n3,l3)n2,l4)n1)root;",
+            {
+                "root": "A", "n1": "C", "n2": "A", "n3": "A",
+                "l1": "A", "l2": "A", "l3": "A", "l4": "C",
+            },
         )
         labels = self.model.get_reversion_labels_from_tree(tree)
         internal = get_internal_node_labels(tree, labels)
         assert internal["n1"] == 0.0  # A->C, no reversion
         assert internal["n2"] == 1.0  # C->A, A seen before -> reversion
+        assert internal["n3"] == 0.0  # A->A, no mutation
 
     def test_multi_step_reversion(self):
         """A->C->G->A: the site returns to A after two intermediate mutations."""
@@ -69,10 +77,10 @@ class TestBaselineReversion:
         # Site 0: A->C->A (reversion at n2)
         # Site 1: G->G->T (no reversion at n2, just a new mutation)
         tree = make_tree(
-            "(((l1,l2)n2,l3)n1)root;",
+            "((((l1,l2)n3,l3)n2,l4)n1)root;",
             {
-                "root": "AG", "n1": "CG", "n2": "AT",
-                "l1": "AT", "l2": "AT", "l3": "AT",
+                "root": "AG", "n1": "CG", "n2": "AT", "n3": "AT",
+                "l1": "AT", "l2": "AT", "l3": "AT", "l4": "CG",
             },
         )
         labels = self.model.get_reversion_labels_from_tree(tree)
@@ -84,10 +92,10 @@ class TestBaselineReversion:
         # Site 0: A->C->G (no reversion)
         # Site 1: G->T->C (no reversion)
         tree2 = make_tree(
-            "(((l1,l2)n2,l3)n1)root;",
+            "((((l1,l2)n3,l3)n2,l4)n1)root;",
             {
-                "root": "AG", "n1": "CT", "n2": "GC",
-                "l1": "GC", "l2": "GC", "l3": "GC",
+                "root": "AG", "n1": "CT", "n2": "GC", "n3": "GC",
+                "l1": "GC", "l2": "GC", "l3": "GC", "l4": "CT",
             },
         )
         labels2 = self.model.get_reversion_labels_from_tree(tree2)
