@@ -63,11 +63,15 @@ class TraverseNN(L.LightningModule):
             present in a maximum parsimony tree
     """
 
-    def __init__(self, learning_rate=0.01, feature_length=32, dim_mlp_layers=32):
+    def __init__(
+        self, learning_rate=0.01, feature_length=32, dim_mlp_layers=32,
+        dynamic_class_weights=False,
+    ):
         super().__init__()
         self.lr = learning_rate
         self.feature_length = feature_length
         self.dim_mlp_layers = dim_mlp_layers
+        self.dynamic_class_weights = dynamic_class_weights
         self.traverse_stack = nn.Sequential(
             nn.Linear(2 * n_states + 2 * feature_length, dim_mlp_layers),
             nn.ReLU(),
@@ -97,6 +101,18 @@ class TraverseNN(L.LightningModule):
             pred, target.unsqueeze(-1), reduction="none"
         )
         masked_loss = loss * mask.unsqueeze(-1)  # element-wise multiplication
+        if self.dynamic_class_weights:
+            pos_mask = (target >= 0.5).float() * mask
+            neg_mask = (target < 0.5).float() * mask
+            n_pos = pos_mask.sum(dim=1, keepdim=True).clamp(min=1)
+            n_neg = neg_mask.sum(dim=1, keepdim=True).clamp(min=1)
+            n_valid = n_pos + n_neg
+            weights = torch.where(
+                target >= 0.5,
+                n_valid / (2 * n_pos),
+                n_valid / (2 * n_neg),
+            )
+            masked_loss = masked_loss * weights.unsqueeze(-1)
         return masked_loss.mean()
 
     def _process_batch(self, batch):
@@ -550,6 +566,29 @@ class TraverseMaxPooling(TraverseNN):
     classification (maximum over all sites)
     """
 
+    def __init__(
+        self, learning_rate=0.01, feature_length=32, dim_mlp_layers=32,
+        dynamic_class_weights=False,
+    ):
+        # Skip TransformerEncoder layers from TraverseNN
+        L.LightningModule.__init__(self)
+        self.lr = learning_rate
+        self.feature_length = feature_length
+        self.dim_mlp_layers = dim_mlp_layers
+        self.dynamic_class_weights = dynamic_class_weights
+        self.traverse_stack = nn.Sequential(
+            nn.Linear(2 * n_states + 2 * feature_length, dim_mlp_layers),
+            nn.ReLU(),
+            nn.Linear(dim_mlp_layers, feature_length),
+        )
+        self.d_model = 2 * feature_length
+        self.classifier = nn.Linear(self.d_model, 1)
+        self.roc_metric = BinaryROC()
+        self.auroc_metric = AUROC(task="binary")
+        self.accuracy_metric = BinaryAccuracy()
+        self.test_probs = []
+        self.test_targets = []
+
     def site_aggregate(self, tree):
         """
         Takes an encoding of the root sequence of a tree and aggregates its
@@ -589,11 +628,15 @@ class TraverseAvgPooling(TraverseNN):
     aggregation by taking the average of features over all sites
     """
 
-    def __init__(self, learning_rate=0.01, feature_length=32, dim_mlp_layers=32):
+    def __init__(
+        self, learning_rate=0.01, feature_length=32, dim_mlp_layers=32,
+        dynamic_class_weights=False,
+    ):
         super().__init__()
         self.lr = learning_rate
         self.feature_length = feature_length
         self.dim_mlp_layers = dim_mlp_layers
+        self.dynamic_class_weights = dynamic_class_weights
         self.d_model = 2 * feature_length
         self.traverse_stack = nn.Sequential(
             nn.Linear(2 * n_states + 2 * feature_length, dim_mlp_layers),

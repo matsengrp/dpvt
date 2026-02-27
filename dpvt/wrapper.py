@@ -410,6 +410,7 @@ class Wrap:
         accum_grad_batches=1,
         timestamp=str(todays_date),
         added_callbacks=[],
+        dynamic_class_weights=False,
     ):
         self.log_path = log_path
         if device == "cpu-tree-dataset":
@@ -418,6 +419,7 @@ class Wrap:
             self.device = device
         self.profiling = profiling
         self.accum_grad_batches = accum_grad_batches
+        self.dynamic_class_weights = dynamic_class_weights
 
         # If hyperparameter tuning has been done, read hyperparameters and use
         # them from training
@@ -432,6 +434,9 @@ class Wrap:
             self.dim_mlp_layers = best_hyperparams["dim_mlp_layers"]
             self.accum_grad_batches = best_hyperparams["accum_grad_batches"]
             self.epochs = best_hyperparams["epochs"]
+            self.dynamic_class_weights = best_hyperparams.get(
+                "dynamic_class_weights", dynamic_class_weights
+            )
             print(f"hyperparameters: {best_hyperparams}")
         else:
             print("Use default parameters for ", log_path)
@@ -444,7 +449,8 @@ class Wrap:
         if isinstance(model, type):
             # `model` is a class
             self.model = model(
-                self.learning_rate, self.feature_length, self.dim_mlp_layers
+                self.learning_rate, self.feature_length, self.dim_mlp_layers,
+                dynamic_class_weights=self.dynamic_class_weights,
             )
         else:
             # `model` is an instance of a class
