@@ -88,6 +88,8 @@ class TraverseNN(L.LightningModule):
         self.roc_metric = BinaryROC()
         self.auroc_metric = AUROC(task="binary")
         self.accuracy_metric = BinaryAccuracy()
+        self.pr_curve_metric = BinaryPrecisionRecallCurve()
+        self.avg_precision_metric = BinaryAveragePrecision() 
         # Temporary storage for probabilities and targets
         self.test_probs = []
         self.test_targets = []
@@ -175,6 +177,8 @@ class TraverseNN(L.LightningModule):
         # only get unmasked output
         masked_pred = pred[mask]
         masked_labels = labels[mask].unsqueeze(-1).int()
+        self.pr_curve_metric.update(probs, targets)
+        self.avg_precision_metric.update(probs, targets)
         self.test_probs.append(masked_pred)
         self.test_targets.append(masked_labels)
         if torch.numel(masked_labels) > 0:  # Check if there are any unmasked elements
@@ -220,6 +224,25 @@ class TraverseNN(L.LightningModule):
         accuracy = self.accuracy_metric.compute()
         self.log("test_accuracy", accuracy.item(), on_step=False, on_epoch=True)
 
+        precision, recall, thresholds = self.pr_curve_metric.compute()
+        avg_precision = self.avg_precision_metric.compute()
+        self.log("test_avg_precision", avg_precision.item(), on_step=False, on_epoch=True)
+        
+        # Plot and log the PR curve figure
+        precision, recall, _ = self.pr_curve_metric.compute()
+        precision = precision.cpu()
+        recall = recall.cpu()
+
+        fig, ax = plt.subplots()
+        ax.plot(recall, precision, label=f"AP: {avg_precision:.2f}")
+        ax.set_xlabel("Recall")
+        ax.set_ylabel("Precision")
+        ax.set_title("Precision-Recall Curve")
+        ax.legend(loc="lower left")
+        if self.logger:
+            self.logger.experiment.add_figure("PR Curve", fig, self.current_epoch)
+        plt.close(fig)
+
         fpr, tpr, thresholds = self.roc_metric(probs, targets)
         fpr = fpr.cpu()
         tpr = tpr.cpu()
@@ -241,6 +264,8 @@ class TraverseNN(L.LightningModule):
         self.test_targets.clear()
         self.roc_metric.reset()
         self.accuracy_metric.reset()
+        self.pr_curve_metric.reset()
+        self.avg_precision_metric.reset()
 
     def forward(self, input, optimized=False):
         """
