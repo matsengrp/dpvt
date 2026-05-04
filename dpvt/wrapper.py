@@ -411,11 +411,8 @@ class Wrap:
         accum_grad_batches=1,
         timestamp=str(todays_date),
         added_callbacks=[],
-<<<<<<< Updated upstream
         dynamic_class_weights=False,
-=======
         num_workers=None,
->>>>>>> Stashed changes
     ):
         self.log_path = log_path
         if device == "cpu-tree-dataset":
