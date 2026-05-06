@@ -350,13 +350,15 @@ class TraverseNN(L.LightningModule):
                     # in downward traversal, only multiply mutation encoding of sibling by -1
                     mutation1 = -1 * mutations[adj_node1]
                     mutation2 = mutations[adj_node2]
+                feature1 = node_features[adj_node1,i]
+                feature2 = node_features[adj_node2,0]
                 # Compute features for the current node
                 combined_data = torch.cat(
                     (
                         mutation1,
-                        node_features[adj_node1, i],
+                        feature1,
                         mutation2,
-                        node_features[adj_node2, i],
+                        feature2,
                     ),
                     dim=1,
                 )
