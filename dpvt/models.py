@@ -3,7 +3,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torchmetrics import AUROC
-from torchmetrics.classification import BinaryROC, BinaryAccuracy, BinaryConfusionMatrix
+from torchmetrics.classification import BinaryROC, BinaryAccuracy, BinaryConfusionMatrix, BinaryPrecisionRecallCurve, BinaryAveragePrecision
 from torch.nn.utils.rnn import pad_sequence
 
 import matplotlib
@@ -84,6 +84,11 @@ class TraverseNN(L.LightningModule):
         self.roc_metric = BinaryROC()
         self.auroc_metric = AUROC(task="binary")
         self.accuracy_metric = BinaryAccuracy()
+<<<<<<< Updated upstream
+=======
+        self.pr_curve_metric = BinaryPrecisionRecallCurve()
+        self.avg_precision_metric = BinaryAveragePrecision()
+>>>>>>> Stashed changes
         # Temporary storage for probabilities and targets
         self.test_probs = []
         self.test_targets = []
@@ -165,6 +170,8 @@ class TraverseNN(L.LightningModule):
             self.auroc_metric(masked_pred, masked_labels)
             probs = torch.sigmoid(masked_pred)
             self.accuracy_metric(probs, masked_labels)
+            self.pr_curve_metric.update(probs, masked_labels)
+            self.avg_precision_metric.update(probs, masked_labels)
             loss = self.masked_bce_loss(pred, labels, mask)
             self.log("test_loss", loss.item(), batch_size=len(labels))
         else:
@@ -553,6 +560,34 @@ class TraverseMaxPooling(TraverseNN):
     classification (maximum over all sites)
     """
 
+<<<<<<< Updated upstream
+=======
+    def __init__(
+        self, learning_rate=0.01, feature_length=32, dim_mlp_layers=32,
+        dynamic_class_weights=False,
+    ):
+        # Skip TransformerEncoder layers from TraverseNN
+        L.LightningModule.__init__(self)
+        self.lr = learning_rate
+        self.feature_length = feature_length
+        self.dim_mlp_layers = dim_mlp_layers
+        self.dynamic_class_weights = dynamic_class_weights
+        self.traverse_stack = nn.Sequential(
+            nn.Linear(2 * n_states + 2 * feature_length, dim_mlp_layers),
+            nn.ReLU(),
+            nn.Linear(dim_mlp_layers, feature_length),
+        )
+        self.d_model = 2 * feature_length
+        self.classifier = nn.Linear(self.d_model, 1)
+        self.roc_metric = BinaryROC()
+        self.auroc_metric = AUROC(task="binary")
+        self.accuracy_metric = BinaryAccuracy()
+        self.pr_curve_metric = BinaryPrecisionRecallCurve()
+        self.avg_precision_metric = BinaryAveragePrecision()
+        self.test_probs = []
+        self.test_targets = []
+
+>>>>>>> Stashed changes
     def site_aggregate(self, tree):
         """
         Takes an encoding of the root sequence of a tree and aggregates its
@@ -607,6 +642,8 @@ class TraverseAvgPooling(TraverseNN):
         self.roc_metric = BinaryROC()
         self.auroc_metric = AUROC(task="binary")
         self.accuracy_metric = BinaryAccuracy()
+        self.pr_curve_metric = BinaryPrecisionRecallCurve()
+        self.avg_precision_metric = BinaryAveragePrecision()
         # Temporary storage for probabilities and targets
         self.test_probs = []
         self.test_targets = []
