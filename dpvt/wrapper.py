@@ -411,7 +411,6 @@ class Wrap:
         accum_grad_batches=1,
         timestamp=str(todays_date),
         added_callbacks=[],
-        num_workers=None,
     ):
         self.log_path = log_path
         if device == "cpu-tree-dataset":
@@ -457,8 +456,7 @@ class Wrap:
         #     size droplast = True
         # Use fewer workers to avoid GPU memory issues with large datasets
         # pin_memory helps transfer data to GPU efficiently
-        if num_workers is None:
-            num_workers = 0 if self.device in ["cuda", "gpu"] else 10
+        num_workers = 1 if self.device in ["cuda", "gpu"] else 10
         self.train_loader = DataLoader(
             train_data,
             batch_size=self.batch_size,
