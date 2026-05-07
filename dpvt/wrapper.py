@@ -411,6 +411,7 @@ class Wrap:
         accum_grad_batches=1,
         timestamp=str(todays_date),
         added_callbacks=[],
+        num_workers=None,
     ):
         self.log_path = log_path
         if device == "cpu-tree-dataset":
