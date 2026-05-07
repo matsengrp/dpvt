@@ -5,7 +5,8 @@ from torch.nn.utils.rnn import pad_sequence
 import lightning as L
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.profilers import AdvancedProfiler
-from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
+from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping, TQDMProgressBar
+from lightning.pytorch.plugins.environments import LightningEnvironment
 from torch.utils.data import Dataset
 from ete3 import Tree
 from datetime import datetime
@@ -455,7 +456,8 @@ class Wrap:
         #     size droplast = True
         # Use fewer workers to avoid GPU memory issues with large datasets
         # pin_memory helps transfer data to GPU efficiently
-        num_workers = 2 if self.device in ["cuda", "gpu"] else 10
+        if num_workers is None:
+            num_workers = 0 if self.device in ["cuda", "gpu"] else 10
         self.train_loader = DataLoader(
             train_data,
             batch_size=self.batch_size,
@@ -497,7 +499,8 @@ class Wrap:
         )
 
         # Build callbacks list
-        callbacks = [checkpoint_callback, early_stop_callback] + added_callbacks
+        progress_bar = TQDMProgressBar(refresh_rate=1)
+        callbacks = [checkpoint_callback, early_stop_callback, progress_bar] + added_callbacks
 
         # Derive run_dir from log_path (go up 3 directories)
         # log_path structure: {run_dir}/{log_name}/{step_name}/{model_str}
@@ -522,6 +525,8 @@ class Wrap:
         self.trainer = L.Trainer(
             accelerator=self.device,
             devices=1,
+            strategy="auto",
+            plugins=[LightningEnvironment()],
             logger=logger,
             log_every_n_steps=1,
             max_epochs=self.epochs,
@@ -529,10 +534,12 @@ class Wrap:
             callbacks=callbacks,
             profiler=profiler,
             accumulate_grad_batches=self.accum_grad_batches,
+            num_sanity_val_steps=0,
         )
 
     def train(self, checkpoint):
         # train and save trained model
+        print("Starting trainer.fit()...")
         self.trainer.fit(self.model, self.train_loader, self.val_loader)
         self.trainer.save_checkpoint(checkpoint)
 
