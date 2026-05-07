@@ -343,13 +343,14 @@ class TraverseNN(L.LightningModule):
                     # stop if we are in padded part of traversal representation
                     break
                 if i == 0:
-                    # in upward traversal, multiply mutation encodings of both children by -1
+                    # in upward traversal, use mutation encodings as-is (leaf-to-root direction)
                     mutation1 = -1 * mutations[adj_node1]
                     mutation2 = -1 * mutations[adj_node2]
                 else:
-                    # in downward traversal, only multiply mutation encoding of sibling by -1
-                    mutation1 = -1 * mutations[adj_node1]
-                    mutation2 = mutations[adj_node2]
+                    # in downward traversal, negate parent mutation (adj_node1) to match
+                    # from_parent direction; sister mutation (adj_node2) is used as-is
+                    mutation1 = mutations[adj_node1]
+                    mutation2 = -1 * mutations[adj_node2]
                 feature1 = node_features[adj_node1,i]
                 feature2 = node_features[adj_node2,0]
                 # Compute features for the current node
@@ -533,14 +534,14 @@ class TraverseNN(L.LightningModule):
                         raise ValueError(f"Each node sequence must be in {STATES}")
                 new_row = torch.tensor(mut_vec).unsqueeze(0)
                 if i == 0:
-                    node.add_feature("to_parent", {"edge_mutation": new_row})
-                    node.add_feature("from_parent", {"edge_mutation": -new_row})
+                    node.add_feature("to_parent", {"edge_mutation": -new_row})
+                    node.add_feature("from_parent", {"edge_mutation": new_row})
                 else:
                     node.to_parent["edge_mutation"] = torch.cat(
-                        (node.to_parent["edge_mutation"], new_row)
+                        (node.to_parent["edge_mutation"], -new_row)
                     )
                     node.from_parent["edge_mutation"] = torch.cat(
-                        (node.from_parent["edge_mutation"], -new_row)
+                        (node.from_parent["edge_mutation"], new_row)
                     )
         return None
 

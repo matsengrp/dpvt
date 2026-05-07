@@ -229,12 +229,12 @@ class TraversalDataset(Dataset):
         mutations = torch.full(
             (len(trees), max_n_nodes, max_n_sites, 4),
             -1,
-            dtype=torch.float32,
+            dtype=torch.float64,
             device="cpu",
         )
         # from actual 0 entries representing no mutation
         traversal = torch.full(
-            (len(trees), 2, max_n_int_nodes, 3), -1, dtype=torch.float32, device="cpu"
+            (len(trees), 2, max_n_int_nodes, 3), -1, dtype=torch.float64, device="cpu"
         )
         timings["  allocate_tensors"] = time.perf_counter() - t0
         tensor_size_gb = (mutations.numel() + traversal.numel()) * 4 / (1024**3)
@@ -344,7 +344,7 @@ class TraversalDataset(Dataset):
     def pad_labels(self, labels):
         print(f"Padding labels for {len(labels)} trees...")
         label_tensors = [
-            torch.tensor(label, dtype=torch.float32, device="cpu") for label in labels
+            torch.tensor(label, dtype=torch.float64, device="cpu") for label in labels
         ]
         result = pad_sequence(label_tensors, batch_first=True, padding_value=0)
         print("  Label padding complete!")
