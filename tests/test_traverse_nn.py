@@ -1,9 +1,13 @@
+import pytest
+import torch
 from ete3 import Tree
 
 from dpvt.models import (
     TraverseNN,
     TraverseMaxPooling,
+    TraverseAvgPooling,
 )
+from dpvt.wrapper import TraversalDataset
 
 
 def assign_sequences(trees, seq_dict):
@@ -85,3 +89,41 @@ def test_max_pooling_nn():
     out = model([tree])
     for x in out[0]:
         assert x.item() > 0
+
+
+@pytest.mark.parametrize("model_cls", [TraverseNN, TraverseMaxPooling, TraverseAvgPooling])
+@pytest.mark.parametrize("trees_fixture", ["good_trees", "site4_good_trees"])
+def test_traversal_paths_agree(model_cls, trees_fixture):
+    """forward_on_tree and forward_on_traversal must produce identical logits."""
+    trees = good_trees if trees_fixture == "good_trees" else site4_good_trees
+    tree = trees[0]
+    n_nodes = len(list(tree.traverse()))
+    labels = [[0] * n_nodes]
+
+    # Match the real training environment: configure_torch() sets float64 as default.
+    # TraversalDataset hardcodes float64; forward_on_tree creates tensors in the
+    # default dtype. Both must agree.
+    prev_dtype = torch.get_default_dtype()
+    torch.set_default_dtype(torch.float64)
+    try:
+        model = model_cls()
+        model.eval()
+        max_seq_length = len(tree.sequence)
+
+        dataset = TraversalDataset([tree], labels, device="cpu")
+        traversal = dataset.traversal[0]
+        mutations = dataset.mutations[0]
+
+        with torch.no_grad():
+            out_tree = model.forward_on_tree(tree, max_seq_length)
+            out_traversal = model.forward_on_traversal(traversal, mutations)
+    finally:
+        torch.set_default_dtype(prev_dtype)
+
+    assert out_tree.shape == out_traversal.shape, (
+        f"Shape mismatch: forward_on_tree={out_tree.shape}, "
+        f"forward_on_traversal={out_traversal.shape}"
+    )
+    assert torch.allclose(out_tree, out_traversal, atol=1e-6), (
+        f"Max absolute difference: {(out_tree - out_traversal).abs().max().item()}"
+    )
