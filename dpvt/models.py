@@ -351,8 +351,8 @@ class TraverseNN(L.LightningModule):
                     # from_parent direction; sister mutation (adj_node2) is used as-is
                     mutation1 = mutations[adj_node1]
                     mutation2 = -1 * mutations[adj_node2]
-                feature1 = node_features[adj_node1,i]
-                feature2 = node_features[adj_node2,0]
+                feature1 = node_features[adj_node1, i]
+                feature2 = node_features[adj_node2, 0]  # sister always contributes upward feature
                 # Compute features for the current node
                 combined_data = torch.cat(
                     (
