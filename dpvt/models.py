@@ -1,4 +1,5 @@
 import warnings
+from pathlib import Path
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -226,18 +227,16 @@ class TraverseNN(L.LightningModule):
 
         precision, recall, _ = self.pr_curve_metric.compute()
         avg_precision = self.avg_precision_metric.compute()
-        precision = precision.cpu()
-        recall = recall.cpu()
 
         fig, ax = plt.subplots()
-        ax.plot(recall, precision, label=f"AP: {avg_precision:.2f}")
+        ax.plot(recall.cpu(), precision.cpu(), label=f"AP: {avg_precision:.2f}")
         ax.set_xlabel("Recall")
         ax.set_ylabel("Precision")
         ax.set_title("PR Curve")
         ax.legend(loc="lower left")
 
         if self.logger:
-            self.logger.experiment.add_figure("PR Curve", fig, self.current_epoch)
+            fig.savefig(Path(self.logger.log_dir) / "pr_curve.pdf", bbox_inches="tight")
 
         plt.close(fig)
 
