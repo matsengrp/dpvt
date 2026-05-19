@@ -84,11 +84,8 @@ class TraverseNN(L.LightningModule):
         self.roc_metric = BinaryROC()
         self.auroc_metric = AUROC(task="binary")
         self.accuracy_metric = BinaryAccuracy()
-<<<<<<< Updated upstream
-=======
         self.pr_curve_metric = BinaryPrecisionRecallCurve()
         self.avg_precision_metric = BinaryAveragePrecision()
->>>>>>> Stashed changes
         # Temporary storage for probabilities and targets
         self.test_probs = []
         self.test_targets = []
@@ -227,11 +224,30 @@ class TraverseNN(L.LightningModule):
 
         plt.close(fig)
 
+        precision, recall, _ = self.pr_curve_metric.compute()
+        avg_precision = self.avg_precision_metric.compute()
+        precision = precision.cpu()
+        recall = recall.cpu()
+
+        fig, ax = plt.subplots()
+        ax.plot(recall, precision, label=f"AP: {avg_precision:.2f}")
+        ax.set_xlabel("Recall")
+        ax.set_ylabel("Precision")
+        ax.set_title("PR Curve")
+        ax.legend(loc="lower left")
+
+        if self.logger:
+            self.logger.experiment.add_figure("PR Curve", fig, self.current_epoch)
+
+        plt.close(fig)
+
         # Clear the stored probabilities and targets
         self.test_probs.clear()
         self.test_targets.clear()
         self.roc_metric.reset()
         self.accuracy_metric.reset()
+        self.pr_curve_metric.reset()
+        self.avg_precision_metric.reset()
 
     def forward(self, input, optimized=False):
         """
@@ -560,34 +576,6 @@ class TraverseMaxPooling(TraverseNN):
     classification (maximum over all sites)
     """
 
-<<<<<<< Updated upstream
-=======
-    def __init__(
-        self, learning_rate=0.01, feature_length=32, dim_mlp_layers=32,
-        dynamic_class_weights=False,
-    ):
-        # Skip TransformerEncoder layers from TraverseNN
-        L.LightningModule.__init__(self)
-        self.lr = learning_rate
-        self.feature_length = feature_length
-        self.dim_mlp_layers = dim_mlp_layers
-        self.dynamic_class_weights = dynamic_class_weights
-        self.traverse_stack = nn.Sequential(
-            nn.Linear(2 * n_states + 2 * feature_length, dim_mlp_layers),
-            nn.ReLU(),
-            nn.Linear(dim_mlp_layers, feature_length),
-        )
-        self.d_model = 2 * feature_length
-        self.classifier = nn.Linear(self.d_model, 1)
-        self.roc_metric = BinaryROC()
-        self.auroc_metric = AUROC(task="binary")
-        self.accuracy_metric = BinaryAccuracy()
-        self.pr_curve_metric = BinaryPrecisionRecallCurve()
-        self.avg_precision_metric = BinaryAveragePrecision()
-        self.test_probs = []
-        self.test_targets = []
-
->>>>>>> Stashed changes
     def site_aggregate(self, tree):
         """
         Takes an encoding of the root sequence of a tree and aggregates its
