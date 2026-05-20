@@ -236,9 +236,8 @@ class TraverseNN(L.LightningModule):
 
         fig, ax = plt.subplots()
         ax.plot(recall.cpu(), precision.cpu(), label=f"AP: {avg_precision:.2f}")
-        ax.set_xlabel("Recall")
-        ax.set_ylabel("Precision")
-        ax.set_title("PR Curve")
+        ax.set_xlabel("Recall", fontsize=16)
+        ax.set_ylabel("Precision", fontsize=16)
         ax.legend(loc="lower left")
 
         if self.logger:
