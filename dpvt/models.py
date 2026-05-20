@@ -4,7 +4,13 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torchmetrics import AUROC
-from torchmetrics.classification import BinaryROC, BinaryAccuracy, BinaryConfusionMatrix, BinaryPrecisionRecallCurve, BinaryAveragePrecision
+from torchmetrics.classification import (
+    BinaryROC,
+    BinaryAccuracy,
+    BinaryConfusionMatrix,
+    BinaryPrecisionRecallCurve,
+    BinaryAveragePrecision,
+)
 from torch.nn.utils.rnn import pad_sequence
 
 import matplotlib
@@ -237,6 +243,8 @@ class TraverseNN(L.LightningModule):
 
         if self.logger:
             fig.savefig(Path(self.logger.log_dir) / "pr_curve.pdf", bbox_inches="tight")
+            self.logger.experiment.add_figure("PR Curve", fig, self.current_epoch)
+        self.log("test_avg_precision", avg_precision.item(), on_step=False, on_epoch=True)
 
         plt.close(fig)
 
@@ -374,7 +382,9 @@ class TraverseNN(L.LightningModule):
                     mutation1 = mutations[adj_node1]
                     mutation2 = -1 * mutations[adj_node2]
                 feature1 = node_features[adj_node1, i]
-                feature2 = node_features[adj_node2, 0]  # sister always contributes upward feature
+                feature2 = node_features[
+                    adj_node2, 0
+                ]  # sister always contributes upward feature
                 # Compute features for the current node
                 combined_data = torch.cat(
                     (
