@@ -12,6 +12,7 @@ from torchmetrics.classification import (
     BinaryAveragePrecision,
 )
 from torch.nn.utils.rnn import pad_sequence
+import csv
 
 import matplotlib
 
@@ -241,8 +242,18 @@ class TraverseNN(L.LightningModule):
         ax.legend(loc="lower left")
 
         if self.logger:
-            fig.savefig(Path(self.logger.log_dir) / "pr_curve.pdf", bbox_inches="tight")
+            log_dir = Path(self.logger.log_dir)
+            fig.savefig(log_dir / "pr_curve.pdf", bbox_inches="tight")
             self.logger.experiment.add_figure("PR Curve", fig, self.current_epoch)
+            csv_path = log_dir / "pr_curve.csv"
+            ap = avg_precision.item()
+            with open(csv_path, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(["recall", "precision", "avg_precision"])
+                writer.writerows(
+                    (r, p, ap)
+                    for r, p in zip(recall.cpu().tolist(), precision.cpu().tolist())
+                )
         self.log("test_avg_precision", avg_precision.item(), on_step=False, on_epoch=True)
 
         plt.close(fig)
