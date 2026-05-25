@@ -100,11 +100,11 @@ def test_traversal_paths_agree(model_cls, trees_fixture):
     n_nodes = len(list(tree.traverse()))
     labels = [[0] * n_nodes]
 
-    # Match the real training environment: configure_torch() sets float64 as default.
-    # TraversalDataset hardcodes float64; forward_on_tree creates tensors in the
+    # Match the real training environment: configure_torch() sets float32 as default.
+    # TraversalDataset hardcodes float32; forward_on_tree creates tensors in the
     # default dtype. Both must agree.
     prev_dtype = torch.get_default_dtype()
-    torch.set_default_dtype(torch.float64)
+    torch.set_default_dtype(torch.float32)
     try:
         model = model_cls()
         model.eval()
