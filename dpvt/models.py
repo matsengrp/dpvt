@@ -1,10 +1,18 @@
 import warnings
+from pathlib import Path
 import torch
 from torch import nn
 import torch.nn.functional as F
 from torchmetrics import AUROC
-from torchmetrics.classification import BinaryROC, BinaryAccuracy, BinaryConfusionMatrix
+from torchmetrics.classification import (
+    BinaryROC,
+    BinaryAccuracy,
+    BinaryConfusionMatrix,
+    BinaryPrecisionRecallCurve,
+    BinaryAveragePrecision,
+)
 from torch.nn.utils.rnn import pad_sequence
+import csv
 
 import matplotlib
 
@@ -84,6 +92,8 @@ class TraverseNN(L.LightningModule):
         self.roc_metric = BinaryROC()
         self.auroc_metric = AUROC(task="binary")
         self.accuracy_metric = BinaryAccuracy()
+        self.pr_curve_metric = BinaryPrecisionRecallCurve()
+        self.avg_precision_metric = BinaryAveragePrecision()
         # Temporary storage for probabilities and targets
         self.test_probs = []
         self.test_targets = []
@@ -165,6 +175,8 @@ class TraverseNN(L.LightningModule):
             self.auroc_metric(masked_pred, masked_labels)
             probs = torch.sigmoid(masked_pred)
             self.accuracy_metric(probs, masked_labels)
+            self.pr_curve_metric.update(probs, masked_labels)
+            self.avg_precision_metric.update(probs, masked_labels)
             loss = self.masked_bce_loss(pred, labels, mask)
             self.log("test_loss", loss.item(), batch_size=len(labels))
         else:
@@ -220,11 +232,39 @@ class TraverseNN(L.LightningModule):
 
         plt.close(fig)
 
+        precision, recall, _ = self.pr_curve_metric.compute()
+        avg_precision = self.avg_precision_metric.compute()
+
+        fig, ax = plt.subplots()
+        ax.plot(recall.cpu(), precision.cpu(), label=f"AP: {avg_precision:.2f}")
+        ax.set_xlabel("Recall", fontsize=16)
+        ax.set_ylabel("Precision", fontsize=16)
+        ax.legend(loc="lower left")
+
+        if self.logger and self.logger.log_dir is not None:
+            log_dir = Path(self.logger.log_dir)
+            fig.savefig(log_dir / "pr_curve.pdf", bbox_inches="tight")
+            self.logger.experiment.add_figure("PR Curve", fig, self.current_epoch)
+            csv_path = log_dir / "pr_curve.csv"
+            ap = avg_precision.item()
+            with open(csv_path, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(["recall", "precision", "avg_precision"])
+                writer.writerows(
+                    (r, p, ap)
+                    for r, p in zip(recall.cpu().tolist(), precision.cpu().tolist())
+                )
+        self.log("test_avg_precision", avg_precision.item(), on_step=False, on_epoch=True)
+
+        plt.close(fig)
+
         # Clear the stored probabilities and targets
         self.test_probs.clear()
         self.test_targets.clear()
         self.roc_metric.reset()
         self.accuracy_metric.reset()
+        self.pr_curve_metric.reset()
+        self.avg_precision_metric.reset()
 
     def forward(self, input, optimized=False):
         """
@@ -352,7 +392,9 @@ class TraverseNN(L.LightningModule):
                     mutation1 = mutations[adj_node1]
                     mutation2 = -1 * mutations[adj_node2]
                 feature1 = node_features[adj_node1, i]
-                feature2 = node_features[adj_node2, 0]  # sister always contributes upward feature
+                feature2 = node_features[
+                    adj_node2, 0
+                ]  # sister always contributes upward feature
                 # Compute features for the current node
                 combined_data = torch.cat(
                     (
@@ -607,6 +649,8 @@ class TraverseAvgPooling(TraverseNN):
         self.roc_metric = BinaryROC()
         self.auroc_metric = AUROC(task="binary")
         self.accuracy_metric = BinaryAccuracy()
+        self.pr_curve_metric = BinaryPrecisionRecallCurve()
+        self.avg_precision_metric = BinaryAveragePrecision()
         # Temporary storage for probabilities and targets
         self.test_probs = []
         self.test_targets = []
