@@ -106,6 +106,7 @@ def test_get_mutations():
     expected_mutations[1, 5, 0, 2] = -1
     expected_mutations[1, 6, 0, 1] = -1
     expected_mutations[1, 6, 0, 3] = 1
+    assert mutations.dtype == torch.float32
     assert torch.equal(expected_mutations, mutations)
 
 
@@ -134,4 +135,5 @@ def test_get_traversal():
     print(expected_traversal)
     print("Computed:")
     print(traversal)
+    assert traversal.dtype == torch.float32
     assert torch.equal(expected_traversal, traversal)

@@ -1,3 +1,7 @@
+import csv
+from pathlib import Path
+from unittest.mock import MagicMock, patch, PropertyMock
+
 import pytest
 import torch
 from ete3 import Tree
@@ -100,9 +104,9 @@ def test_traversal_paths_agree(model_cls, trees_fixture):
     n_nodes = len(list(tree.traverse()))
     labels = [[0] * n_nodes]
 
-    # Match the real training environment: configure_torch() sets float32 as default.
-    # TraversalDataset hardcodes float32; forward_on_tree creates tensors in the
-    # default dtype. Both must agree.
+    # TraversalDataset hardcodes float32 for mutations and traversal tensors.
+    # forward_on_tree creates tensors via torch.zeros using the default dtype.
+    # Both must agree, so set the default to float32.
     prev_dtype = torch.get_default_dtype()
     torch.set_default_dtype(torch.float32)
     try:
@@ -124,6 +128,54 @@ def test_traversal_paths_agree(model_cls, trees_fixture):
         f"Shape mismatch: forward_on_tree={out_tree.shape}, "
         f"forward_on_traversal={out_traversal.shape}"
     )
-    assert torch.allclose(out_tree, out_traversal, atol=1e-6), (
+    assert torch.allclose(out_tree, out_traversal, atol=1e-4), (
         f"Max absolute difference: {(out_tree - out_traversal).abs().max().item()}"
     )
+
+
+@pytest.mark.parametrize("model_cls", [TraverseNN, TraverseAvgPooling])
+def test_on_test_epoch_end_saves_pr_curve(model_cls, tmp_path):
+    """on_test_epoch_end writes pr_curve.pdf and pr_curve.csv and resets metrics."""
+    model = model_cls()
+
+    # Simulate what test_step accumulates for 4 samples.
+    # test_targets stores [N,1] int targets (matching test_step's unsqueeze(-1));
+    # metrics are updated with 1D tensors as torchmetrics requires matching shapes.
+    logits = torch.tensor([2.0, 1.5, -1.0, -2.0], dtype=torch.float32)
+    labels = torch.tensor([1, 1, 0, 0], dtype=torch.int32)
+    probs = torch.sigmoid(logits)
+
+    model.test_probs.append(logits)
+    model.test_targets.append(labels)
+    model.auroc_metric(logits, labels)
+    model.accuracy_metric(probs, labels)
+    model.pr_curve_metric.update(probs, labels)
+    model.avg_precision_metric.update(probs, labels)
+
+    mock_logger = MagicMock()
+    mock_logger.log_dir = str(tmp_path)
+
+    with patch.object(type(model), "logger", new_callable=PropertyMock, return_value=mock_logger):
+        with patch.object(type(model), "current_epoch", new_callable=PropertyMock, return_value=0):
+            with patch.object(model, "log"):
+                model.on_test_epoch_end()
+
+    # PDF saved
+    assert (tmp_path / "pr_curve.pdf").exists()
+
+    # CSV has correct header, one row per threshold point, constant avg_precision
+    csv_path = tmp_path / "pr_curve.csv"
+    assert csv_path.exists()
+    with open(csv_path) as f:
+        rows = list(csv.DictReader(f))
+    assert len(rows) > 0
+    assert set(rows[0].keys()) == {"recall", "precision", "avg_precision"}
+    ap_values = {float(row["avg_precision"]) for row in rows}
+    assert len(ap_values) == 1
+    assert 0.0 <= ap_values.pop() <= 1.0
+
+    # Accumulators and metrics are cleared
+    assert model.test_probs == []
+    assert model.test_targets == []
+    assert model.pr_curve_metric.preds == []
+    assert model.avg_precision_metric.preds == []

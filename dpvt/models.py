@@ -241,7 +241,7 @@ class TraverseNN(L.LightningModule):
         ax.set_ylabel("Precision", fontsize=16)
         ax.legend(loc="lower left")
 
-        if self.logger:
+        if self.logger and self.logger.log_dir is not None:
             log_dir = Path(self.logger.log_dir)
             fig.savefig(log_dir / "pr_curve.pdf", bbox_inches="tight")
             self.logger.experiment.add_figure("PR Curve", fig, self.current_epoch)
